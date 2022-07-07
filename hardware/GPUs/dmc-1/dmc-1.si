@@ -1,0 +1,854 @@
+// _____________________________________________________________________________
+// |                                                                           |
+// | DMC-1 TinyGPU                                                             |
+// |                                                                           |
+// | @sylefeb 2020-12-02                                                       |
+// |___________________________________________________________________________|
+// |                                                                           |
+// |  License: CERN-OHL-S                                                      |
+// |     A copy of the license full text is included in                        |
+// |     the distribution, please refer to it for details.                     |
+// |___________________________________________________________________________|
+
+// screen configuration
+$$doomchip_width     = 320
+$$doomchip_height    = 240
+$$doomchip_height_p2 = 8
+
+$$if SIMULATION then
+$$ profile           = nil
+$$ verbose           = 1
+$$end
+
+// ---------------------------------------------------
+
+unit screen_buffer(
+  input  uint1  in_ready,
+  input  uint17 in_data,
+  output uint1  send,
+  output uint1  send_dc,
+  output uint8  send_byte
+) {
+
+  uint16 current_data(0);
+  uint4  current_cfg(0);
+
+  uint8  wait(0);
+
+  // Two modes: in_data[16,1]
+  // - direct 0
+  //     in_data[ 0,8] byte
+  //     in_data[ 8,1] data or command
+  // - pixel 1
+  //     in_data[ 0,8] RG
+  //     in_data[ 8,8] GB
+
+  always {
+
+    send          = 0; // maintain low
+
+    if (in_ready) {
+      current_data = in_data[0,16];
+      current_cfg  = in_data[16,1] ? 4b1010 : {2b0,1b1,in_data[8,1]};
+      send         = 1;
+      wait         = 8b11111111;
+    } else {
+      if (~wait[0,1]) {
+        // send the next byte
+        current_data = current_data >> 8;
+        current_cfg  = current_cfg  >> 2;
+        send         = current_cfg [1,1]; // present?
+        wait         = current_cfg [1,1] ? 8b11111111 : 8b0;
+      } else {
+        // update waiting modulo
+        wait = wait >> 1;
+      }
+    }
+    send_byte    =   current_data[0,8];
+    send_dc      = ~ current_cfg [0,1]; // data or command
+  }
+
+}
+
+// ---------------------------------------------------
+
+unit spi_screen( // for ST7789
+  input   uint1 start,      input   uint1 data_or_command, input  uint8 byte,
+  output  uint1 screen_clk, output  uint1 screen_mosi,     output uint1 screen_dc,
+) {
+
+  uint2 osc        = 1;
+  uint1 dc         = 0;
+  uint9 sending    = 0;
+  uint9 busy       = 0;
+
+$$if verbose then
+  uint32 cycle(0);
+$$end
+
+  always {
+    screen_dc   =  dc;
+    osc         =  busy[0,1] ? {osc[0,1],osc[1,1]} : 2b1;
+    screen_clk  =  ~busy[0,1] || (osc[1,1]); // SPI Mode 3
+    if (start & ~busy[0,1]) {
+      //         ^^^^^^^^^^^ as we run double freq, avoids reading start twice
+      dc        = data_or_command;
+      sending   = { byte[0,1],byte[1,1],byte[2,1],byte[3,1],
+                    byte[4,1],byte[5,1],byte[6,1],byte[7,1],1b0};
+      busy      = 9b111111111;
+			osc       = 2b01;
+$$if verbose then
+      //__display("[screen %d] sending byte %x",cycle,byte);
+$$end
+    } else {
+      screen_mosi = sending[0,1];
+      sending     = osc[1,1] ? {1b0,sending[1,8]} : sending;
+      busy        = osc[1,1] ? {1b0,   busy[1,8]} : busy;
+$$if verbose then
+      if (start) {
+        //__display("[screen %d] warning, start:%b busy:%b",cycle,start,busy);
+      }
+$$end
+    }
+
+$$if verbose then
+    if (busy[0,1]) {
+      //__display("[screen %d] sending busy:%b osc:%b",cycle,busy,osc);
+    }
+    cycle = cycle + 1;
+$$end
+  }
+}
+
+// ---------------------------------------------------
+
+$$if ICE40 then
+import('../Silice/common/projects/ice40_sb_io_ddr.v')
+
+unit sb_io_n(input auto o,output sameas(o) p)
+{
+  $$for i=0,widthof('o')-1 do
+  sb_io _(clock <: clock, out <: o[$i$,1], pin :> p[$i$,1]);
+  $$end
+}
+$$else
+import('../Silice/common/projects/ddr.v')
+$$end
+
+unit parallel_screen( // for ILI9341, parallel
+  input   uint1 start,    input  uint1 data_or_command, input  uint8 byte,
+  output  uint8 screen_d(0), output uint1 screen_dc(0), output uint1 screen_wrn(1)
+) {
+
+  uint1 scr_trigger(1);
+  uint8 scr_byte(0);
+  uint1 scr_dc(0);
+$$if ICE40 then
+  uint1 high(1);
+  sb_io_ddr _(clock <: clock, out_0 <: scr_trigger, out_1 <: high, pin :> screen_wrn);
+  sb_io_n   _(o                     <: scr_byte,    p   :> screen_d);
+  sb_io     _(clock <: clock, out   <: scr_dc,      pin :> screen_dc);
+$$else
+  uint2 twice <: {1b1,scr_trigger};
+  ddr       _(clock <: clock, twice <: twice, out_pin :> screen_wrn);
+$$end
+
+  always {
+$$if verbose then
+    screen_d    = scr_byte;
+    screen_dc   = scr_dc;
+$$end
+    scr_byte    =  byte;
+    scr_dc      =  data_or_command;
+    scr_trigger = ~start;
+$$if verbose then
+    if (start) {
+      // __display("[lcd] sending byte %x, data: %b",byte,data_or_command);
+    }
+$$end
+  }
+
+}
+
+// ---------------------------------------------------
+
+group sampler2D {
+  // bind to texture
+  uint1  do_bind(0),
+  // fetch at u,v
+  uint1  do_fetch(0),
+  // texture to fetch from
+  uint10 tex_id(0),
+  // input texture coords
+  uint11 u(0),
+  uint11 v(0),
+  // fetched texel
+  uint8 texel(0),
+  // is ready? (binding done)
+  uint1  ready(0),
+}
+
+interface sampler2D_provider {
+  input   do_bind,
+  input   do_fetch,
+  input   tex_id,
+  input   u,
+  input   v,
+  output  texel,
+  output  ready,
+}
+
+group spiflash_io {
+  uint1      in_ready(0),
+  uint24     addr(0),
+  uint8      data(0),
+  uint1      busy(1),
+}
+
+interface spiflash_user {
+  output in_ready,
+  output addr,
+  input  data,
+  input  busy,
+}
+
+// ---------------------------------------------------
+
+$$sky_pal_idx = 0 -- 99
+
+// _____________________________________________________________________________
+// |                                                                           |
+// | The texture sampler                                                       |
+// |                                                                           |
+// | This is an essential component of our little GPU. It does two tasks:      |
+// | - Texture binding: retrieves info about a specific texture id:            |
+// |     + base texture address                                                |
+// |     + width height dimensions (power of 2 exponent)                       |
+// | - Texture sampling (uv fetch)                                             |
+// |                                                                           |
+// | The texture sampler has sole control of the memory interface to textures. |
+// | This is a byte interface, so binding takes multiple accesses (something to|
+// | be improved).                                                             |
+// | Texture memory starts with a header table, with an 8 byte record          |
+// | per texture. The record encodes the binding information.                  |
+// | For texture id T, the record is at BASE + T<<3, with BASE the base address|
+// | of the texture data (2MB currently).                                      |
+// | Sampling is performed using random access to the memory interface.        |
+// | The parent unit is responsible to wait for the number of cycles it takes  |
+// | to retrieve the correct value (the memory interface is expected to have   |
+// | a fixed latency, i.e. 6 cycles on SPIflash 2x clock).                     |
+// |                                                                           |
+// |___________________________________________________________________________|
+//
+unit texture_sampler(
+  sampler2D_provider smplr,  // texture sampler interface
+  spiflash_user      sf,     // texture memory interface
+) {
+  uint13 tbl_addr(0);   // texture info address in header table
+  uint6  binding(0);    // reads 4 bytes on binding (addrx3 whx1)
+  uint24 tex_addr(0);   // base texture address
+  uint4  tex_wp2(0);    // texture width pow2
+  uint4  tex_hp2(0);    // texture height pow2
+
+  uint1  fetch_next(0); // fetch on next cycle
+  uint1  skip_one(0);   // wait one cycle (for sf.busy to rise)
+
+  uint11 u(0);          // u fetch coordinate
+  uint11 v(0);          // v fetch coordinate
+  uint24 fetch_addr(0); // fetch address (from u,v)
+
+  always {
+    uint1  starting   <:: (~binding[0,1]) & smplr.do_bind;
+    uint11 modu       <:: ((1<<tex_wp2)-1);
+    uint11 modv       <:: ((1<<tex_hp2)-1);
+    // maintain memory tirgger low, pulse high on access
+    sf.in_ready   = 0;
+    // update binding (takes multiple cycles, continues while binding[0,1] == 1)
+    binding       = starting ? 6b011111
+                             : ((~sf.busy & ~skip_one) ? binding>>1 : binding);
+    smplr.ready   = ~binding[0,1];  // ready to sample when not binding
+    // next fetch address (not u,v are from previous cycle, see below)
+    fetch_next    = smplr.do_fetch; // fetch on next cycle
+    fetch_addr    = tex_addr + (u | (v << tex_wp2)); // compute fetch address
+    //              ^^^^^^^^ built-in 2MB offset
+    // apply module to u,v, fetch coordinates
+    // note fetch_addr is computed /before/ which means there is a one cycle
+    // latency between computing u,v an computing fetch_addr: relaxes timing.
+    u             = smplr.u & modu;
+    v             = smplr.v & modv;
+    // we always write a result, but it is incorrect during binding and access
+    // caller has to wait the expected number of cycles so the value is ok
+    smplr.texel   = smplr.tex_id == 0 ? $sky_pal_idx$ : sf.data;
+    // bind or fetch
+    if (binding[0,1] & (~sf.busy & ~skip_one) ) { // ---- binding
+      // binding
+      skip_one    = 1;
+      // setup next read
+      tbl_addr    = binding[4,1] ? {smplr.tex_id,3b000} //_ 8 bytes per record
+                                 : (tbl_addr + 1);      // next byte in record
+      sf.addr     = {11b00100000000,tbl_addr};
+       //                  ^ texture header is at 2MB offset
+      sf.in_ready = binding[1,1];
+      // store result
+      switch (binding[1,3]) {
+        case 3b111: { tex_addr[ 0,8] = sf.data; }
+        case 3b011: { tex_addr[ 8,8] = sf.data; }
+        case 3b001: { tex_addr[16,8] = sf.data; }
+        default: { }
+      }
+      tex_wp2        = sf.data[0,4]; // written last, so no condition
+      tex_hp2        = sf.data[4,4];
+    } else {                                      // ---- fetching
+      skip_one      = 0;
+      // fetch next sample
+      sf.addr       = binding[0,1]
+                    ? sf.addr
+                    : fetch_addr;
+      sf.in_ready   = fetch_next;
+    }
+  }
+}
+
+// -------------------------
+
+group view { // contains view-dependent parameters
+  int16  view_z(0), // view elevation
+  // (there used to be more, but has been simplified away!)
+}
+
+bitfield depth {
+  uint1  b, // buffer used when depth was filled
+  uint15 d  // depth
+}
+
+// -------------------------
+
+unit span_drawer(
+  input uint1                in_start(0), // pulse
+  input uint32               in_tex1,
+  input uint32               in_tex0,
+  input uint1                buffer, // which buffer? (we have two)
+  simple_dualport_bram_port1 colbufs,
+  output uint1               busy(1),
+  output uint8               pickedh,
+  spiflash_user              sf,
+  input view                 vw,
+) {
+
+$$terrain_step = 2048
+
+  sampler2D       sampler_io;
+  texture_sampler sampler(sf <:> sf, smplr <:> sampler_io);
+
+  // BRAM for single column depth buffer
+  simple_dualport_bram uint16 depths[$doomchip_height$] = uninitialized;
+
+  // BRAM for 1/y table
+  bram uint16 inv_y[2048] = {
+    65535,
+$$for hscr=1,2047 do
+    $65535//(hscr)$,
+    //    ^^ Lua integer division
+$$end
+  };
+  // ---- decode incoming draw call
+  // column span start and end
+  uint8  col_start <: in_tex1[10,8];
+  uint8  col_end   <: in_tex1[18,8] > 8d$doomchip_height-1$
+                      ? 8d$doomchip_height-1$ : in_tex1[18,8];
+  // draw command type
+  uint1  wall     <:: in_tex1[30,2] == 2b00;   // wall?
+  uint1  plane    <:: in_tex1[30,2] == 2b01;   // plane? (perspective span)
+  uint1  terrain  <:: in_tex1[30,2] == 2b10;   // terrain?
+  uint1  param    <:: in_tex1[30,2] == 2b11;   // parameter?
+  // on a param decode which data is sent
+  uint1  ray_cs   <:: param & (in_tex0[30,2] == 2b00);
+  uint1  planeA   <:: param & (in_tex0[31,1]        ); //_ 2b10
+  uint1  uv_offs  <:: param & (in_tex0[30,2] == 2b01);
+  // other
+  uint1  pickh    <:: terrain & in_tex0[31,1]; // pick terrain height?
+
+  // ---- drawing status
+  uint1  drawing(0);
+  uint8  current(0);     // current y pos along span
+  uint8  end    (0);     // ending y value
+  uint1  pickh_done(0);  // picking done
+  uint1  current_done <:: (current >= end); // column end reached
+
+  // ---- plane (perspective)
+  int24  dot_u(0);
+  int24  dot_v(0);
+  int24  dot_ray(0);
+  int24  ded(0);
+  int10  ny_inc(0);
+  int10  uy_inc(0);
+  int10  vy_inc(0);
+  int32  ray_t(0);
+  int14  u_offset(0);
+  int14  v_offset(0);
+
+  // ---- terrain
+  uint1  tcol_rdy(0);       // a terrain column is ready (projected height)
+  int24  tcol_dist(0);      // terrain column dist from view
+  uint24 prev_tcol_dist(0); // previous terrain column dist from view
+  uint8  scrh_diff(0); // when drawing a terrain span, diff btw 'end - prev. end'
+  uint11 terrain_dist <:: tcol_rdy ? tcol_dist[8,11] : tc_v[8,11];
+  uint1  terrain_done <:: (tcol_dist[8,11] > in_tex0[ 0,11])
+                        | (tcol_dist[$8+11$,1]); // max distance reached (2048)
+  uint24 scrd_inc <:: ((tcol_dist[8,11] - prev_tcol_dist[8,11]) * inv_y.rdata) >> 8;
+  //     ^^^^^^^^ when drawing a terrain span, per-screen pixel increment
+  // ray cosine/sine
+  int13  cosray(0);
+  int13  sinray(0);
+
+  // ---- texturing
+  uint4  state(0); // computation state
+  // texture coordinates registers
+  int24  wc_v(0);  // walls only
+  uint8  wc_u(0);  // walls only
+  int24  tc_v(0);  // terrain only
+  int24  tr_u(0);  int24  tr_v(0); // planes and terrain result coords
+  // multiply and add registers
+  // - a single MAD logic computes a * b + c every cycle
+  // - the a,b,c registers are multiplex with the desired input
+  int32  a(0);  int32  b(0);  int32  c(0);
+
+  // ---- orchestration
+  // NOTE: terrain needs 2 cycles after sample is received TODO: why??
+$$if MCH2022 then
+  $$delay_bit = 12
+$$else
+$$if spi4x then
+  $$delay_bit = 7
+$$else
+  $$delay_bit = 9
+$$end
+$$end
+  // rotating bit vector implementing the per-pixel cycle, such that
+  // the pixel computation is done when the MSB is 1
+  uint$delay_bit+1$ smplr_delay(0);
+  uint1  start(0);     // start fetching a span
+  uint3  skip(0);      // do not increment along span and disable pixel writes
+
+  // take into account the various delays for texel fetch
+  // - LSB are most delayed
+  // - only one of wall, plane, terrain is 1
+$$if MCH2022 then
+  // fetch is 10 cycles
+  $$ smplr_seq_init       = '{8b0,plane|wall,1b0,1b0,terrain}'
+  //                              ^^^^ plane and wall go as fast as SPI texlkup
+  //                                                 ^^^ terrain needs +3 cyles
+  $$ smplr_seq_init_start = smplr_seq_init
+$$else
+$$if spi4x then
+  // fetch is 4 cycles
+  $$ smplr_seq_init       = '{2b0,plane|wall,1b0,1b0,terrain,1b0}'
+  //                              ^^^^ plane and wall go as fast as SPI texlkup
+  //                                                 ^^^ terrain needs +3 cyles
+  $$ smplr_seq_init_start = '{3b0,plane|wall,1b0,1b0,terrain}'
+  //                          ^^^
+  // init needs one additional cycle to warm up the pipeline
+$$else
+  // fetch is 7 cycles
+  $$ smplr_seq_init       = '{5b0,plane|wall,1b0,1b0,terrain}'
+  //                              ^^^^ plane and wall go as fast as SPI texlkup
+  //                                                 ^^^ terrain needs +3 cyles
+  $$ smplr_seq_init_start = smplr_seq_init
+$$end
+$$end
+
+  always {
+    // ---- depth buffer
+    // depth test
+    uint15 dist    <:: (terrain ? {3b0,tcol_dist[8,12]} : 15b0)
+                     | (plane   ?          ray_t[2,15]  : 15b0)
+                     | (wall    ? {{2{in_tex0[15,1]}},in_tex0[3,13]} : 15b0);
+    //                             ^^^^^^^^^^^ ensures max is behing anything
+    uint1 depth_ok <::    (depth(depths.rdata0).b ^ buffer)
+    //                                              ^^^^^ ignore prev. frame
+                        | (dist < depth(depths.rdata0).d);
+    // darkening with distance
+    uint4  obscure_dist <:: dist[7,4];
+    uint4  obscure_clmp <:: obscure_dist > 10 ? 10 : obscure_dist;
+    int5   light        <:: (__signed({1b0,in_tex1[26,4]})
+                           - __signed({1b0,obscure_clmp[0,4]}));
+    // opactiy test
+    uint1 opaque     <:: ~tcol_rdy & ~skip[0,1] & (sampler_io.texel != 255);
+    uint1 sky        <:: sampler_io.tex_id == 0;
+    // final tex coords for walls
+    uint8 wc_u_8     <:: (wc_u     );
+    uint8 wc_v_8     <:: (wc_v >>11); // NOTE: has to match init
+    // multiply and add
+    int32 result     <:: (a * b) + c;
+
+    // goes through transform computations
+    // for both flats and terrain columns
+    // (sampler works in parallel)
+    switch ({terrain,state})
+    {
+      // ---- plane starts here
+      case 0: {
+        // NOTE: inv_y.rdata has to be correct. There has to be one cycle
+        //       in between the update of inv_y.addr (see below) and hitting
+        //       this state.
+        a     = __signed(inv_y.rdata); //_  1/dot_ray
+        b     = __signed(ded);         //_ *h    // NOTE: use in_tex0 directly?
+        c     = {24{1b0}};
+      }
+      case 1: {
+        ray_t = result >>> 6;
+        a     = __signed(ray_t); //_  t
+        b     = __signed(dot_u); //_ *dot_u
+      }
+      case 2: {
+        tr_u  = (result >>> 20) + __signed(u_offset);
+        // a     = __signed(ray_t);  //_  t
+        b     = __signed(dot_v); //_ *dot_v
+      }
+      case 3: {
+        tr_v  = (result >>> 20) + __signed(v_offset);
+      }
+      // ---- plane is done
+
+      // ---- terrain starts here
+      case 16: {
+        a     = terrain_dist;
+        b     = __signed(cosray);
+        c     = {24{1b0}};
+      }
+      case 17: {
+        tr_u  = (__signed(result >>> 12) + __signed(u_offset));
+        a     = terrain_dist;
+        b     = __signed(sinray);
+        c     = {24{1b0}};
+      }
+      case 18: {
+        tr_v  = (__signed(result >>> 12) + __signed(v_offset));
+      }
+      default: {
+        // terrain column height computation, only used if terrain & tcol_rdy
+        a     = inv_y.rdata;
+        b     = (__signed({1b0,sampler_io.texel}) - __signed(vw.view_z));
+      }
+      // ---- terrain are done
+    }
+    // update state
+    state = state[3,1] ? state : (state+1);
+
+    {
+      // ---- output to color buffer
+      sameas(current) pixcoord <:: current;
+      //sameas(current) pixcoord <:: current;
+      colbufs.addr1       = { buffer,pixcoord[0,$doomchip_height_p2$] };
+      colbufs.wdata1      = { (light[4,1] ? 4b0 : light[0,4]) | (sky ? 4d15 : 4d0),
+                              sampler_io.texel };
+      colbufs.wenable1    = smplr_delay[$delay_bit$,1] & depth_ok & opaque;
+      // ---- read/write to depth buffer
+      depths.addr0        = pixcoord;
+      depths.addr1        = pixcoord;
+      depths.wdata1       = { buffer,dist };
+      depths.wenable1     = smplr_delay[$delay_bit$,1] & depth_ok & opaque;
+      // NOTE:              ^^ next sample is ready, we write result from previous
+    }
+
+    // ---- texture sampler access
+    sampler_io.do_bind  = 0;
+    sampler_io.do_fetch = 0; // pulsed high when needed in always block
+    // TODO: simplify below if applicable ===============================
+    sampler_io.u        =  (plane   ? tr_u[0,8]                   : 11b0)
+                        |  (wall    ? {3b0,wc_u_8}                : 11b0)
+                        |  (terrain ? {          1b0,tr_u[2,10]}  : 11b0);
+    sampler_io.v        =  (plane   ? {1b0,tr_v[0,8]}             : 11b0)
+                        |  (wall    ? {3b0,wc_v_8}                : 11b0)
+                        |  (terrain ? {~current_done,tr_v[2,10]}  : 11b0);
+//                                     ^^^^^^^^^^^^^ selects height or color
+//                                     hardcoded for a 1024 texture size ...
+
+    // access inv_y
+    // NOTE: uses values from previous cycle (fmax)
+    {
+      int24 neg_dot_ray <:: - dot_ray;
+      inv_y .addr = terrain ? (tcol_rdy      ? tcol_dist[8,11]   : scrh_diff)
+                            : (dot_ray[23,1] ? neg_dot_ray[8,11] : dot_ray[8,11]);
+    }
+
+    if (in_start) {
+      // texture id on bindings
+      uint10 tex_id  <:: in_tex1[0,10];
+      // span init
+      end                = terrain ? col_start : col_end;
+      current            = col_start;
+      // ray cos/sin (terrain)
+      cosray             = ray_cs ? __signed(in_tex0[ 0,14]) : cosray;
+      sinray             = ray_cs ? __signed(in_tex0[14,14]) : sinray;
+      // u,v offsets (plane)
+      u_offset           = uv_offs? __signed(in_tex0[ 0,14]) : u_offset;
+      v_offset           = uv_offs? __signed(in_tex0[14,14]) : v_offset;
+      // plane span data
+      ny_inc             = planeA ? __signed(in_tex0[ 0,10])       : ny_inc;
+      uy_inc             = planeA ? __signed(in_tex0[10,10])       : uy_inc;
+      vy_inc             = planeA ? __signed(in_tex0[20,10])       : vy_inc;
+      dot_u              = planeA ? __signed({in_tex1[ 1,14],8b0}) : dot_u;
+      dot_v              = planeA ? __signed({in_tex1[15,14],8b0}) : dot_v;
+      ded                = plane  ? __signed(in_tex0[ 0,16])       : ded;
+      dot_ray            = plane  ? __signed({in_tex0[16,16],8b0}) : dot_ray;
+      // bind texture
+      sampler_io.do_bind = (tex_id != sampler_io.tex_id) & ~param;
+      sampler_io.tex_id  = ~param ? tex_id : sampler_io.tex_id;
+      // walls wc_u
+      wc_u               = __signed( in_tex0[24,8] );
+      // walls
+      wc_v               = __signed({in_tex0[16, 8],11b0});
+      // terrains
+      tc_v               = __signed({in_tex0[16,11], 8b0});
+      // terrain, init column distance
+      tcol_dist          = __signed({in_tex0[16,11],8b0});
+      prev_tcol_dist     = __signed({in_tex0[16,11],8b0});
+      // statrt drawing
+      drawing            = ~param; // if not param, we start drawing
+      start              = ~param;
+      // skip allow to warm up the pipeline
+$$if spi4x then
+      skip               = {~wall,2b11};
+      //                    ^^^^^
+      // for walls skip two iterations, three for others
+$$else
+      skip               = 3b011;  // no pixel writes on two first iterations
+$$end
+      // terrain
+      tcol_rdy           = 0; // next column height ready
+      pickh_done         = 0; // picking done
+
+    } else { // in_start -------------------------------
+
+			uint1 still_drawing  <:: terrain ? ~terrain_done
+                                       : (~current_done | skip[0,1]);
+      //                                  ^^^^^^^^^^^^    ^^^^^^^^^
+      //        still drawing if current not done or we are warming the pipeline
+      //        this condition (skip[0,1]) is important for 1-pixel spans
+
+      // ---- start fetching next sample: one cycle before the sampler is done
+      //      so we maximize SPIflash throughput, leaving no gap
+  		sampler_io.do_fetch = still_drawing & smplr_delay[$delay_bit-1$,1];
+
+      // ---- a texture sample is available
+      //      this happens on the next (and final) cycle of the orchestration
+      //      loop as the SPIflash controller output is registered
+			if (smplr_delay[$delay_bit$,1]) {
+
+				drawing             = still_drawing; // keep drawing
+				if (tcol_rdy) {
+					// next column height has been computed, start next terrain span
+					int16 scrh     <:: (result>>>8) + 16d$doomchip_height//2$;
+					uint8 end_next <:: scrh[15,1] ? 8b0 : (scrh < col_end ? scrh[0,8] : col_end);
+					scrh_diff = end_next - current;
+					tcol_rdy  = 0;
+					tc_v      = prev_tcol_dist;   // TODO add based on (current - end)
+					end        = end_next;
+					pickedh    = pickh & ~pickh_done ? sampler_io.texel : pickedh;
+					pickh_done = 1;
+				} else {
+					// advance along current
+					uint1  next_tcol_rdy  <:: terrain & current_done; // current span done?
+					uint2  step_shift     <:: tcol_dist[$8+9$,2];     // NOTE: dist < 2048
+					uint16 terrain_step   <:: 16d$terrain_step$ << step_shift;
+					uint14 tc_v_inc       <:: scrd_inc;
+					uint14 wc_v_inc       <:: __signed(in_tex0[0,14]);
+					tcol_rdy          = next_tcol_rdy;
+					prev_tcol_dist    = next_tcol_rdy ? tcol_dist : prev_tcol_dist;
+					tcol_dist         = next_tcol_rdy ? (tcol_dist + terrain_step) : tcol_dist;
+					// increment current
+					current      = (current_done | skip[0,1]) ? current : (current + 1       );
+					tc_v         = skip[0,1] ? tc_v : (tc_v    + tc_v_inc);
+          wc_v         = wc_v    + wc_v_inc;
+          dot_ray      = dot_ray + ny_inc;
+          dot_u        = dot_u   + uy_inc;
+          dot_v        = dot_v   + vy_inc;
+					skip         = skip[1,1] ? (skip>>1) : {2b0,terrain & current_done};
+          //                                          ^^^^^^^^^^^^^^^^^^^^^^
+          //     for terrain, skip next while we sample the next column height
+				}
+			} // smplr_delay[$delay_bit$,1]
+
+      if (smplr_delay[$delay_bit$,1]) {
+        smplr_delay = $smplr_seq_init$;
+        state       = 0;  // restart compute sequence
+      } else {
+        smplr_delay = (~drawing | ~sampler_io.ready | start)
+                    ? $smplr_seq_init_start$
+                    // ^^^^  hold init when not drawing or just starting
+                    : {smplr_delay[0,$delay_bit$],smplr_delay[$delay_bit$,1]};
+                    // ^^^^ rotate orchestration sequence
+        if (start) { state = 0; } // restart compute sequence
+        start       = (start & ~sampler_io.ready); // keep high if not ready
+      }
+
+    } // in_start
+
+    busy         = drawing | ~sampler_io.ready;
+    //                        ^^^^^ binding in progress
+  }
+
+}
+
+// -------------------------
+
+// include the palette file, generated by calling 'make' in demos/data
+$include('../../../demos/build/palette666.si')
+
+unit column_sender(
+  input uint1                in_start(0), // pulse
+  input uint1                buffer,   // buffer to send (we have two)
+  simple_dualport_bram_port0 colbufs,
+  output uint1               screen_send(0),
+  output uint17              screen_data,
+  output uint1               busy(1),
+) {
+
+  brom uint18 palette[256] = {$palette666$};
+
+  uint8  count(8d$doomchip_height$);
+  uint32 sending(0);
+
+  always {
+    // done when the full column is sent
+    uint1 done     <:: (count == 8d$doomchip_height$);
+    // send next while not done and sending of previous is done
+    uint1 next     <:: ~done & ~sending[0,1];
+    // light level adjustment
+    uint4  light   <:: colbufs.rdata0[ 8,4];
+    uint10 ro      <:: palette.rdata[12,6] * light;
+    uint10 go      <:: palette.rdata[ 6,6] * light;
+    uint10 bo      <:: palette.rdata[ 0,6] * light;
+    // final r,g,b values
+    uint6  r       <:: ro >> 4;
+    uint6  g       <:: go >> 4;
+    uint6  b       <:: bo >> 4;
+    // report busy while not done
+    busy          = ~done;
+    // sending delay
+    sending       = (next ? 32h1ffff : (sending >> 1));
+    // pass data to screen driver
+    screen_send   = next; // trigger screen sending on next
+$$if MCH2022 then
+    screen_data   = {1b1, ~{g[0,3],r[1,5],b[1,5],g[3,3]}};
+$$else
+    screen_data   = {1b1,  {g[0,3],b[1,5],r[1,5],g[3,3]}};
+$$end
+    // count sent pixels
+    count         = in_start ? 0 : (next ? count + 1 : count);
+    // lookup next color in palette
+    palette.addr  = colbufs.rdata0[0,8];
+    // lookup next pixel in column buffer
+    colbufs.addr0 = { buffer,count[0,$doomchip_height_p2$] };
+
+  }
+}
+
+// -------------------------
+
+unit tinygpu(
+  input  uint1       in_ready, // pulse
+  input  uint32      in_tex1,
+  input  uint32      in_tex0,
+  output uint1       screen_send(0),
+  output uint17      screen_data,
+  input  uint1       screen_full,
+  output uint1       fifo_empty,
+  output uint1       fifo_full,
+  output uint8       pickedh,
+  spiflash_user      sf,
+  input view         vw,
+) {
+$$log_n_fifo = 8
+$$n_fifo     = 1<<log_n_fifo
+
+  simple_dualport_bram uint64 fifo   [$n_fifo$]                    = uninitialized;
+  // column double buffers
+  // - first  [0                    .. 2^doomchip_height_p2-1    ]
+  // - second [2^doomchip_height_p2 .. 2^(doomchip_height_p2+1)-1]
+  simple_dualport_bram uint12 colbufs[$1<<(doomchip_height_p2+1)$] = uninitialized;
+  //                   ^^^^^^ { light , palette id }
+  uint$log_n_fifo$ waddr($(1<<log_n_fifo)-1$);
+
+  span_drawer drawer<reginputs>(
+    colbufs  <:> colbufs,
+    sf       <:> sf,
+    vw       <:> vw,
+    pickedh   :> pickedh,
+  );
+
+  column_sender sender<reginputs>(
+    screen_send :> screen_send,
+    screen_data :> screen_data,
+    colbufs    <:> colbufs
+  );
+
+  uint1 wait_one(0);
+  uint1 draw_buffer(0);
+
+  always {
+
+    uint$log_n_fifo$ waddr_p1 <:: waddr + $log_n_fifo$d1;
+    uint1 is_empty            <:: waddr_p1 == fifo.addr0;
+    uint1 on_last             <:: (waddr + $log_n_fifo$d7) == fifo.addr0;
+    uint1 is_full(0);
+
+    fifo_empty      = is_empty;
+    fifo_full       = is_full;
+
+    fifo.wenable1   = 0;
+
+    drawer.in_start = 0;
+    sender.in_start = 0;
+
+    if (in_ready) {
+      // store segment draw in FIFO
+      fifo.wenable1 = 1;
+      fifo.wdata1   = {in_tex0,in_tex1};
+      waddr         = waddr_p1;
+      wait_one      = 1;   // we wait one cycle for the write to fifo to occur
+      // is_full?
+      is_full         = on_last ? 1 : is_full;
+
+    } else {
+
+      // process next segment draw from FIFO
+      if ( ~is_empty & ~wait_one ) {
+        uint1 eoc      <::  &{fifo.rdata0[30,2],fifo.rdata0[0,1]}; // end of col
+        uint1 exec     <:: ~eoc & ~drawer.busy;
+        uint1 send_col <::  eoc & ~sender.busy & ~drawer.busy;
+        // wait one cycle for 'busy' signals to trigger
+        wait_one        = (exec | send_col);
+        // execute the next draw call?
+        drawer.in_start = exec;
+        // setup drawer inputs
+        if (exec) {
+          // NOTE: could this be moved in always, ensuring that
+          //       we do not increase addr0 here? (we keep it on current rec)
+          drawer.in_tex1  = fifo.rdata0[ 0,32];
+          drawer.in_tex0  = fifo.rdata0[32,32];
+        }
+        // send the column?
+        sender.in_start = send_col;
+        draw_buffer     = send_col ^ draw_buffer;
+        // is_full?
+        is_full         = (on_last & (exec | send_col)) ? 0 : is_full;
+        // next segment record, unless we hold due to sender busy
+        fifo.addr0      = (exec | send_col) ? fifo.addr0 + $log_n_fifo$d1
+                                            : fifo.addr0;
+      } else {
+        wait_one      = 0;
+      }
+
+    }
+
+    fifo.addr1    = waddr;
+
+    drawer.buffer =  draw_buffer;
+    sender.buffer = ~draw_buffer; // sending buffer not being drawn
+
+  }
+}
+
+// -------------------------

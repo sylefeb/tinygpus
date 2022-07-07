@@ -1,0 +1,8 @@
+// @sylefeb 2020-12-23
+// -------------------------
+
+// pre-compilation script, embeds compiled code within a raw file
+$$sdcard_image_pad_size = 2*65536
+$$dofile('pre_include_asm.lua')
+
+$$error('=======> Done! the spiflash image file is *** code.img ***. Please ignore the subsequent error messages.')

@@ -1,0 +1,42 @@
+// _____________________________________________________________________________
+// |                                                                           |
+// |  Silice preprocessor script to extract WAD data                           |
+// |  ==============================================                           |
+// |                                                                           |
+// | Prepares a texture pack and level structure header for DMC-1 demos        |
+// | - WAD file and level specified below                                      |
+// |                                                                           |
+// | References:                                                               |
+// | - "DooM unofficial specs" http://www.gamers.org/dhs/helpdocs/dmsp1666.html|
+// | - "DooM black book" by Fabien Sanglard                                    |
+// |                                                                           |
+// | @sylefeb 2020-04-28  licence: GPL v3, see full text in repo               |
+// |___________________________________________________________________________|
+
+$$print('---< Preparing data for demos >---')
+
+// IMPORTANT: absolute location of the texture pack in memory, avoids a 24 bits
+//            adder by pre-computing addresses in the texture pack header
+$$texture_data_offset = 2<<20 -- 2 MB,
+
+$$wad   = 'doom1.wad'
+$$level = 'E1M1'
+
+$$doomchip_width     = 320
+$$doomchip_height    = 240
+
+$$dofile('pre_utils.lua')
+
+$$dofile('pre_wad.lua')
+
+$$dofile('pre_textures.lua')
+
+$$dofile('pre_select_textures.lua')
+
+$$dofile('pre_pack_textures.lua')
+
+$$dofile('pre_load_level.lua')
+
+$$dofile('pre_write_level_h.lua')
+
+$$error('done (please ignore preprocessor error message below).')
