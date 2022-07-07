@@ -832,9 +832,9 @@ static inline void terrain(
 static inline void draw_columns()
 {
   for (int c = 0 ; c != doomchip_width ; ++c) {
-#ifdef SIMULATION
-    //printf("Column %d -------------------------\n",c);
-#endif
+//#ifdef SIMULATION
+//  printf("Column %d -------------------------\n",c);
+//#endif
 
     int prev_x    = view_x;
     int prev_y    = view_y;

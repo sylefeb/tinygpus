@@ -686,6 +686,7 @@ $$end
 
     busy         = drawing | ~sampler_io.ready;
     //                        ^^^^^ binding in progress
+
   }
 
 }
@@ -746,34 +747,70 @@ $$end
 
 // -------------------------
 
-unit tinygpu(
-  input  uint1       in_ready, // pulse
-  input  uint64      in_command,
-  output uint1       screen_send(0),
-  output uint17      screen_data,
-  input  uint1       screen_full,
-  output uint1       fifo_empty,
-  output uint1       fifo_full,
-  output uint8       pickedh,
-  spiflash_user      sf,
-  input view         vw,
+unit command_fifo(
+  input   uint1       in_add,  // pulse to add to the fifo
+  input   uint1       in_next, // pulse to remove current from the fifo
+  input   uint64      in_command,
+  output  uint1       empty,
+  output  uint1       full,
+  output! uint64      current,
 ) {
 $$log_n_fifo = 8
 $$n_fifo     = 1<<log_n_fifo
 
-  simple_dualport_bram uint64 fifo   [$n_fifo$]                    = uninitialized;
+  simple_dualport_bram uint64 fifo[$n_fifo$] = uninitialized;
+
+  uint$log_n_fifo$ waddr($(1<<log_n_fifo)-1$);
+
+  always {
+
+    uint$log_n_fifo$ waddr_p1 <:: waddr + $log_n_fifo$d1;
+    uint1 is_empty            <:: waddr_p1 == fifo.addr0;
+    uint1 near_last           <:: (waddr + $log_n_fifo$d7) == fifo.addr0;
+    uint1 is_full(0);
+
+    // output status
+    empty         = is_empty;
+    full          = is_full;
+    current       = fifo.rdata0;
+    // store?
+    fifo.wenable1 = in_add;
+    fifo.wdata1   = in_command;
+    waddr         = in_add ? waddr_p1 : waddr;
+    fifo.addr1    = waddr;
+    // is_full?
+    is_full       = (in_add  & ~in_next & near_last) ? 1
+                  : (in_next & ~in_add  & near_last) ? 0
+                  : is_full;
+    // next?
+    fifo.addr0    = in_next ? fifo.addr0 + $log_n_fifo$d1 : fifo.addr0;
+  }
+}
+
+// -------------------------
+
+unit tinygpu(
+  input   uint1       in_valid, // pulse
+  output  uint1       ready,
+  input   uint64      in_command,
+  output  uint1       screen_send(0),
+  output  uint17      screen_data,
+  input   uint1       screen_full,
+  output  uint8       pickedh,
+  spiflash_user      sf,
+  input view         vw,
+) {
   // column double buffers
   // - first  [0                    .. 2^doomchip_height_p2-1    ]
   // - second [2^doomchip_height_p2 .. 2^(doomchip_height_p2+1)-1]
   simple_dualport_bram uint12 colbufs[$1<<(doomchip_height_p2+1)$] = uninitialized;
   //                   ^^^^^^ { light , palette id }
-  uint$log_n_fifo$ waddr($(1<<log_n_fifo)-1$);
 
   span_drawer drawer<reginputs>(
-    colbufs  <:> colbufs,
-    sf       <:> sf,
-    vw       <:> vw,
-    pickedh   :> pickedh,
+    colbufs   <:>  colbufs,
+    sf        <:>  sf,
+    vw        <:>  vw,
+    pickedh    :>  pickedh,
   );
 
   column_sender sender<reginputs>(
@@ -782,68 +819,48 @@ $$n_fifo     = 1<<log_n_fifo
     colbufs    <:> colbufs
   );
 
-  uint1 wait_one(0);
   uint1 draw_buffer(0);
+  uint2 work_started(0); // once started, it takes 1 cycle for drawer/sender
+                         // busy signals to raise, so we track that we are busy
+
+  uint64 next_command(0);
+  uint1  next_pending(0);
 
   always {
 
-    uint$log_n_fifo$ waddr_p1 <:: waddr + $log_n_fifo$d1;
-    uint1 is_empty            <:: waddr_p1 == fifo.addr0;
-    uint1 on_last             <:: (waddr + $log_n_fifo$d7) == fifo.addr0;
-    uint1 is_full(0);
+    sender.in_start   = 0;
+    drawer.in_start   = 0;
 
-    fifo_empty      = is_empty;
-    fifo_full       = is_full;
+    if (in_valid) {
 
-    fifo.wenable1   = 0;
+      next_command = in_command;
+      next_pending = 1;
 
-    drawer.in_start = 0;
-    sender.in_start = 0;
-
-    if (in_ready) {
-      // store segment draw in FIFO
-      fifo.wenable1 = 1;
-      fifo.wdata1   = in_command;
-      waddr         = waddr_p1;
-      wait_one      = 1;   // we wait one cycle for the write to fifo to occur
-      // is_full?
-      is_full         = on_last ? 1 : is_full;
-
-    } else {
-
-      // process next segment draw from FIFO
-      if ( ~is_empty & ~wait_one ) {
-        uint1 eoc      <::  &{fifo.rdata0[30,2],fifo.rdata0[0,1]}; // end of col
-        uint1 exec     <:: ~eoc & ~drawer.busy;
-        uint1 send_col <::  eoc & ~sender.busy & ~drawer.busy;
-        // wait one cycle for 'busy' signals to trigger
-        wait_one        = (exec | send_col);
-        // execute the next draw call?
-        drawer.in_start = exec;
-        // setup drawer inputs
-        if (exec) {
-          // NOTE: could this be moved in always, ensuring that
-          //       we do not increase addr0 here? (we keep it on current rec)
-          drawer.in_command = fifo.rdata0;
-        }
-        // send the column?
-        sender.in_start = send_col;
-        draw_buffer     = send_col ^ draw_buffer;
-        // is_full?
-        is_full         = (on_last & (exec | send_col)) ? 0 : is_full;
-        // next segment record, unless we hold due to sender busy
-        fifo.addr0      = (exec | send_col) ? fifo.addr0 + $log_n_fifo$d1
-                                            : fifo.addr0;
-      } else {
-        wait_one      = 0;
-      }
-
+    } else { // send next command asap
+      // partially decode command
+      uint8 start    <:: next_command[10,8];
+      uint8 end      <:: next_command[18,8];
+      uint1 param    <:: &(next_command[30,2]);
+      uint1 empty    <:: ~param & (start > end);
+      uint1 eoc      <:: param & next_command[0,1]; // end of col
+      uint1 do_draw  <:: next_pending & ~eoc & ~drawer.busy;
+      uint1 do_send  <:: next_pending &  eoc & ~drawer.busy & ~sender.busy;
+      // drawer command
+      drawer.in_command = (do_draw & ~empty) ? next_command : drawer.in_command;
+      drawer.in_start   =  do_draw & ~empty;
+      //                             ^^^^^^ ignore these
+      // sender command
+      draw_buffer       = do_send ^ draw_buffer;
+      sender.in_start   = do_send;
+      // did we do anything?
+      next_pending      = next_pending & ~(do_draw | do_send);
     }
+    // not ready while next command is pending
+    ready        = ~next_pending;
 
-    fifo.addr1    = waddr;
-
+    // which buffer to draw to and which to send to the screen
     drawer.buffer =  draw_buffer;
-    sender.buffer = ~draw_buffer; // sending buffer not being drawn
+    sender.buffer = ~draw_buffer;
 
   }
 }
