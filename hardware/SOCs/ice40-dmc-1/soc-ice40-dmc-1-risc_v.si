@@ -428,8 +428,8 @@ $$end
         }
         case 4b0001: {
           if (prev_mem_addr[0,1]) {
-            // received tex0
-            gpu.in_tex0 = prev_mem_wdata[0,32];
+            // received first half
+            gpu.in_command[32,32] = prev_mem_wdata[0,32];
           } else {
             // received tex1
             uint1  param   <:: prev_mem_wdata[30,2] == 2b11;
@@ -438,8 +438,8 @@ $$end
             uint1  empty   <:: start > end;
             uint1  eoc     <:: prev_mem_wdata[0,1];
             // send segment to drawer
-            gpu.in_tex1  = prev_mem_wdata[0,32];
-            gpu.in_ready = ~empty | eoc | param; // not null or eoc tag
+            gpu.in_command[0,32] = prev_mem_wdata[0,32];
+            gpu.in_ready         = ~empty | eoc | param; // not null or eoc tag
 $$if SIMULATION then
             if ((~empty | eoc) & ~param) {
               if (eoc) {

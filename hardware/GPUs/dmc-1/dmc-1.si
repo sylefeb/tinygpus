@@ -325,8 +325,7 @@ bitfield depth {
 
 unit span_drawer(
   input uint1                in_start(0), // pulse
-  input uint32               in_tex1,
-  input uint32               in_tex0,
+  input uint64               in_command,
   input uint1                buffer, // which buffer? (we have two)
   simple_dualport_bram_port1 colbufs,
   output uint1               busy(1),
@@ -353,20 +352,20 @@ $$end
   };
   // ---- decode incoming draw call
   // column span start and end
-  uint8  col_start <: in_tex1[10,8];
-  uint8  col_end   <: in_tex1[18,8] > 8d$doomchip_height-1$
-                      ? 8d$doomchip_height-1$ : in_tex1[18,8];
+  uint8  col_start <: in_command[10,8];
+  uint8  col_end   <: in_command[18,8] > 8d$doomchip_height-1$
+                      ? 8d$doomchip_height-1$ : in_command[18,8];
   // draw command type
-  uint1  wall     <:: in_tex1[30,2] == 2b00;   // wall?
-  uint1  plane    <:: in_tex1[30,2] == 2b01;   // plane? (perspective span)
-  uint1  terrain  <:: in_tex1[30,2] == 2b10;   // terrain?
-  uint1  param    <:: in_tex1[30,2] == 2b11;   // parameter?
+  uint1  wall     <:: in_command[30,2] == 2b00;   // wall?
+  uint1  plane    <:: in_command[30,2] == 2b01;   // plane? (perspective span)
+  uint1  terrain  <:: in_command[30,2] == 2b10;   // terrain?
+  uint1  param    <:: in_command[30,2] == 2b11;   // parameter?
   // on a param decode which data is sent
-  uint1  ray_cs   <:: param & (in_tex0[30,2] == 2b00);
-  uint1  planeA   <:: param & (in_tex0[31,1]        ); //_ 2b10
-  uint1  uv_offs  <:: param & (in_tex0[30,2] == 2b01);
+  uint1  ray_cs   <:: param & (in_command[62,2] == 2b00);
+  uint1  planeA   <:: param & (in_command[63,1]        ); //_ 2b10
+  uint1  uv_offs  <:: param & (in_command[62,2] == 2b01);
   // other
-  uint1  pickh    <:: terrain & in_tex0[31,1]; // pick terrain height?
+  uint1  pickh    <:: terrain & in_command[63,1]; // pick terrain height?
 
   // ---- drawing status
   uint1  drawing(0);
@@ -393,7 +392,7 @@ $$end
   uint24 prev_tcol_dist(0); // previous terrain column dist from view
   uint8  scrh_diff(0); // when drawing a terrain span, diff btw 'end - prev. end'
   uint11 terrain_dist <:: tcol_rdy ? tcol_dist[8,11] : tc_v[8,11];
-  uint1  terrain_done <:: (tcol_dist[8,11] > in_tex0[ 0,11])
+  uint1  terrain_done <:: (tcol_dist[8,11] > in_command[32,11])
                         | (tcol_dist[$8+11$,1]); // max distance reached (2048)
   uint24 scrd_inc <:: ((tcol_dist[8,11] - prev_tcol_dist[8,11]) * inv_y.rdata) >> 8;
   //     ^^^^^^^^ when drawing a terrain span, per-screen pixel increment
@@ -462,7 +461,7 @@ $$end
     // depth test
     uint15 dist    <:: (terrain ? {3b0,tcol_dist[8,12]} : 15b0)
                      | (plane   ?          ray_t[2,15]  : 15b0)
-                     | (wall    ? {{2{in_tex0[15,1]}},in_tex0[3,13]} : 15b0);
+                     | (wall    ? {{2{in_command[47,1]}},in_command[35,13]} : 15b0);
     //                             ^^^^^^^^^^^ ensures max is behing anything
     uint1 depth_ok <::    (depth(depths.rdata0).b ^ buffer)
     //                                              ^^^^^ ignore prev. frame
@@ -470,7 +469,7 @@ $$end
     // darkening with distance
     uint4  obscure_dist <:: dist[7,4];
     uint4  obscure_clmp <:: obscure_dist > 10 ? 10 : obscure_dist;
-    int5   light        <:: (__signed({1b0,in_tex1[26,4]})
+    int5   light        <:: (__signed({1b0,in_command[26,4]})
                            - __signed({1b0,obscure_clmp[0,4]}));
     // opactiy test
     uint1 opaque     <:: ~tcol_rdy & ~skip[0,1] & (sampler_io.texel != 255);
@@ -492,7 +491,7 @@ $$end
         //       in between the update of inv_y.addr (see below) and hitting
         //       this state.
         a     = __signed(inv_y.rdata); //_  1/dot_ray
-        b     = __signed(ded);         //_ *h    // NOTE: use in_tex0 directly?
+        b     = __signed(ded);         //_ *h
         c     = {24{1b0}};
       }
       case 1: {
@@ -574,36 +573,36 @@ $$end
 
     if (in_start) {
       // texture id on bindings
-      uint10 tex_id  <:: in_tex1[0,10];
+      uint10 tex_id  <:: in_command[0,10];
       // span init
       end                = terrain ? col_start : col_end;
       current            = col_start;
       // ray cos/sin (terrain)
-      cosray             = ray_cs ? __signed(in_tex0[ 0,14]) : cosray;
-      sinray             = ray_cs ? __signed(in_tex0[14,14]) : sinray;
+      cosray             = ray_cs ? __signed(in_command[32,14]) : cosray;
+      sinray             = ray_cs ? __signed(in_command[46,14]) : sinray;
       // u,v offsets (plane)
-      u_offset           = uv_offs? __signed(in_tex0[ 0,14]) : u_offset;
-      v_offset           = uv_offs? __signed(in_tex0[14,14]) : v_offset;
+      u_offset           = uv_offs? __signed(in_command[32,14]) : u_offset;
+      v_offset           = uv_offs? __signed(in_command[46,14]) : v_offset;
       // plane span data
-      ny_inc             = planeA ? __signed(in_tex0[ 0,10])       : ny_inc;
-      uy_inc             = planeA ? __signed(in_tex0[10,10])       : uy_inc;
-      vy_inc             = planeA ? __signed(in_tex0[20,10])       : vy_inc;
-      dot_u              = planeA ? __signed({in_tex1[ 1,14],8b0}) : dot_u;
-      dot_v              = planeA ? __signed({in_tex1[15,14],8b0}) : dot_v;
-      ded                = plane  ? __signed(in_tex0[ 0,16])       : ded;
-      dot_ray            = plane  ? __signed({in_tex0[16,16],8b0}) : dot_ray;
+      ny_inc             = planeA ? __signed(in_command[32,10])       : ny_inc;
+      uy_inc             = planeA ? __signed(in_command[42,10])       : uy_inc;
+      vy_inc             = planeA ? __signed(in_command[52,10])       : vy_inc;
+      dot_u              = planeA ? __signed({in_command[ 1,14],8b0}) : dot_u;
+      dot_v              = planeA ? __signed({in_command[15,14],8b0}) : dot_v;
+      ded                = plane  ? __signed(in_command[32,16])       : ded;
+      dot_ray            = plane  ? __signed({in_command[48,16],8b0}) : dot_ray;
       // bind texture
       sampler_io.do_bind = (tex_id != sampler_io.tex_id) & ~param;
       sampler_io.tex_id  = ~param ? tex_id : sampler_io.tex_id;
       // walls wc_u
-      wc_u               = __signed( in_tex0[24,8] );
+      wc_u               = __signed( in_command[56,8] );
       // walls
-      wc_v               = __signed({in_tex0[16, 8],11b0});
+      wc_v               = __signed({in_command[48, 8],11b0});
       // terrains
-      tc_v               = __signed({in_tex0[16,11], 8b0});
+      tc_v               = __signed({in_command[48,11], 8b0});
       // terrain, init column distance
-      tcol_dist          = __signed({in_tex0[16,11],8b0});
-      prev_tcol_dist     = __signed({in_tex0[16,11],8b0});
+      tcol_dist          = __signed({in_command[48,11],8b0});
+      prev_tcol_dist     = __signed({in_command[48,11],8b0});
       // statrt drawing
       drawing            = ~param; // if not param, we start drawing
       start              = ~param;
@@ -653,7 +652,7 @@ $$end
 					uint2  step_shift     <:: tcol_dist[$8+9$,2];     // NOTE: dist < 2048
 					uint16 terrain_step   <:: 16d$terrain_step$ << step_shift;
 					uint14 tc_v_inc       <:: scrd_inc;
-					uint14 wc_v_inc       <:: __signed(in_tex0[0,14]);
+					uint14 wc_v_inc       <:: __signed(in_command[32,14]);
 					tcol_rdy          = next_tcol_rdy;
 					prev_tcol_dist    = next_tcol_rdy ? tcol_dist : prev_tcol_dist;
 					tcol_dist         = next_tcol_rdy ? (tcol_dist + terrain_step) : tcol_dist;
@@ -749,8 +748,7 @@ $$end
 
 unit tinygpu(
   input  uint1       in_ready, // pulse
-  input  uint32      in_tex1,
-  input  uint32      in_tex0,
+  input  uint64      in_command,
   output uint1       screen_send(0),
   output uint17      screen_data,
   input  uint1       screen_full,
@@ -805,7 +803,7 @@ $$n_fifo     = 1<<log_n_fifo
     if (in_ready) {
       // store segment draw in FIFO
       fifo.wenable1 = 1;
-      fifo.wdata1   = {in_tex0,in_tex1};
+      fifo.wdata1   = in_command;
       waddr         = waddr_p1;
       wait_one      = 1;   // we wait one cycle for the write to fifo to occur
       // is_full?
@@ -826,8 +824,7 @@ $$n_fifo     = 1<<log_n_fifo
         if (exec) {
           // NOTE: could this be moved in always, ensuring that
           //       we do not increase addr0 here? (we keep it on current rec)
-          drawer.in_tex1  = fifo.rdata0[ 0,32];
-          drawer.in_tex0  = fifo.rdata0[32,32];
+          drawer.in_command = fifo.rdata0;
         }
         // send the column?
         sender.in_start = send_col;
