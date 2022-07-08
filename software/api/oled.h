@@ -56,7 +56,7 @@ void oled_init()
   // madctl
   *(OLED) = OLED_0(0x36) | OLED_CMD_0;
   pause(32);
-  *(OLED) = OLED_0(0x00);
+  *(OLED) = OLED_0(0x40);
   pause(32);
   // long wait
   pause(2*2500000);

@@ -560,7 +560,7 @@ unit column_sender(
   output uint16              screen_data,
   output uint1               busy(1),
 ) {
-  uint32 cycle(0);
+  //uint32 cycle(0);
 
   brom uint18 palette[256] = {$palette666$};
 
@@ -591,15 +591,15 @@ $$else
 $$end
     // count sent pixels
     count         = in_start ? 0 : (next ? count + 1 : count);
-    if (next) {
-      __display("[colsender %d] [screen_valid] sending next (%d)",cycle,count);
-    }
+    //if (next) {
+    //  __display("[colsender %d] [screen_valid] sending next (%d)",cycle,count);
+    //}
     // lookup next color in palette
     palette.addr  = colbufs.rdata0[0,8];
     // lookup next pixel in column buffer
     colbufs.addr0 = { buffer,count[0,$doomchip_height_p2$] };
 
-    cycle = cycle + 1;
+    //cycle = cycle + 1;
   }
 }
 
