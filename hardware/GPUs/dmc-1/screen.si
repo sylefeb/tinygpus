@@ -47,25 +47,37 @@ $$end
 
   always {
 
+    uint16 new_data <: in_data[0,16];
+    uint4  new_cfg  <: in_data[16,1]
+                     ? 4b1010                  // two data bytes
+                     : {2b0,1b1,in_data[8,1]}; // one byte, command or data
+
+
     screen_valid   = 0; // maintain low
-    send_byte      =   current_data[0,8]; // byte to be sent
-    send_dc        = ~ current_cfg [0,1]; // data or command
-    ready          = ~ valid & ~ working[0,1] & screen_ready;
+    ready          = 1;
 
     if (valid) {
-
 $$if SIMULATION then
       //__display("[screen_controller %d] [screen_valid] sending",cycle);
 $$end
-
-      // record what needs to be sent
-      current_data = in_data[0,16];
-      current_cfg  = in_data[16,1]
-                   ? 4b1010                  // two data bytes
-                   : {2b0,1b1,in_data[8,1]}; // one byte, command or data
-      working      = 2b11;
-
+      ready = 0;
+      if (screen_ready) {
+        // start sending immediatly if possible
+        send_byte      =   new_data[0,8]; // byte to be sent
+        send_dc        = ~ new_cfg [0,1];  // data or command
+        screen_valid   =   screen_ready & new_cfg[1,1]; // present?
+        current_data   = new_data[8,8];
+        current_cfg    = new_cfg [2,2];
+        working        = 2b01;
+      } else {
+        // record what needs to be sent
+        current_data   = new_data;
+        current_cfg    = new_cfg;
+        working        = 2b11;
+      }
     } else {
+      send_byte      =   current_data[0,8]; // byte to be sent
+      send_dc        = ~ current_cfg [0,1]; // data or command
       if (screen_ready & working[0,1]) {
         // send the current byte
         screen_valid = current_cfg [1,1]; // present?
@@ -74,11 +86,12 @@ $$end
         current_cfg  = current_cfg  >> 2;
         working      = working      >> 1;
       }
+      ready        = ~ working[0,1];
     }
 
 $$if SIMULATION then
     if (~ready) {
-      __display("[screen_controller %d] working:%b",cycle,working);
+      //__display("[screen_controller %d] working:%b",cycle,working);
     }
     cycle = cycle + 1;
 $$end
@@ -132,7 +145,7 @@ $$end
 
 $$if SIMULATION then
     if (~ready) {
-      __display("[screen %d (%d)] working:%b osc:%b",cycle,cycle>>1,working,osc);
+      //__display("[screen %d (%d)] working:%b osc:%b",cycle,cycle>>1,working,osc);
     }
     cycle = cycle + 1;
 $$end
