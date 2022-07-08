@@ -57,6 +57,8 @@ $include('../../common/simulation_spram.si')
 $$end
 
 $include('../../GPUs/dmc-1/dmc-1.si')
+$include('../../GPUs/dmc-1/screen.si')
+$include('../../GPUs/dmc-1/command_queue.si')
 
 // configuration for the ice-v-dual
 $$ICEV_MULDIV        = 1
@@ -225,28 +227,29 @@ $$end
   // GPU
   spiflash_io      sf_io;
   view             vw;
-  tinygpu gpu(sf <:>  sf_io,
-              vw <::> vw);
+  DMC_1_gpu gpu(sf           <:>  sf_io,
+                vw           <::> vw,
+                screen_ready <:   screen_ctrl.ready);
 
   // ==============================
   // screen display
-  uint1 screen_send(0);
+  uint1 screen_valid(0);
+  uint1 screen_ready(0);
   uint1 screen_send_dc(0);
   uint8 screen_send_byte(0);
-  uint1 screen_send_reg(0);
-  uint1 screen_send_dc_reg(0);
-  uint8 screen_send_byte_reg(0);
-  screen_buffer display_buffer<reginputs>(
-    send      :> screen_send_reg,
-    send_dc   :> screen_send_dc_reg,
-    send_byte :> screen_send_byte_reg,
+  screen_controller screen_ctrl(
+    screen_valid :> screen_valid,
+    screen_ready <: screen_ready,
+    send_dc      :> screen_send_dc,
+    send_byte    :> screen_send_byte,
   );
 
 $$if MCH2022 then
-  parallel_screen display(
-    start           <:: screen_send,
-    data_or_command <:: screen_send_dc,
-    byte            <:: screen_send_byte,
+  parallel_screen screen(
+    valid           <:  screen_valid,
+    ready            :> screen_ready,
+    data_or_command <:  screen_send_dc,
+    byte            <:  screen_send_byte,
     screen_d         :> lcd_d,
     screen_dc        :> lcd_rs,
     screen_wrn       :> lcd_wr_n
@@ -256,10 +259,11 @@ $$else -- not MCH2022
   uint1 o_clk(0);
   uint1 o_dc(0);
   uint1 o_resn(0);
-  spi_screen display<@clock2x,!rst2x> (
-    start           <:: screen_send,
-    data_or_command <:: screen_send_dc,
-    byte            <:: screen_send_byte,
+  spi_screen screen<@clock2x,!rst2x> (
+    valid           <:  screen_valid,
+    ready            :> screen_ready,
+    data_or_command <:  screen_send_dc,
+    byte            <:  screen_send_byte,
 $$if VERILATOR then
     screen_mosi      :> oled_mosi,
     screen_clk       :> oled_clk,
@@ -299,10 +303,6 @@ $$else -- not MCH2022
     );
 $$end
 
-$$if reg_sf_cpu then
-  uint8 sf_reg_rdata(0);
-  uint1 sf_reg_busy(1);
-$$end
 $$if SIMULATION then
   // for simulation, create dummy vars
   uint1 sf_csn(1); uint1 sf_clk(0); uint1 sf_io0(0);
@@ -329,9 +329,9 @@ $$end
   sameas(mem.wdata)   prev_mem_wdata(0);
 
   // ==============================
-  // command FIFO
+  // command queue
 
-  command_fifo cmdq(current :> gpu.in_command);
+  command_queue cmdq(current :> gpu.in_command);
 
   // ==============================
   // main 'loop'
@@ -340,11 +340,7 @@ $$end
 
     user_data[0,24] = {
                       gpu.pickedh,
-$$if reg_sf_cpu then
-                      sf_reg_rdata,
-$$else
                       sf.rdata,
-$$end
 $$if BUTTONS then
                       btns[0,3],
 $$else
@@ -353,32 +349,21 @@ $$end
                       1b0,
                       1b0,
                       cmdq.empty,
-$$if reg_sf_cpu then
-                      sf_reg_busy,
-$$else
                       sf.busy,
-$$end
                       ~cmdq.full
                       };
 
     sf.in_ready    = sf_io.in_ready;
     sf.addr        = sf_io.addr;
-$$if reg_sf_cpu then
-    sf_io.data     = sf_reg_rdata;
-    sf_io.busy     = sf_reg_busy;
-    sf_reg_rdata   = sf.rdata;
-    sf_reg_busy    = sf.busy | sf_io.in_ready;
-$$else
     sf_io.data     = sf.rdata;
     sf_io.busy     = sf.busy;
-$$end
 
     gpu           .in_valid = 0;
     cmdq          .in_add   = 0;
     cmdq          .in_next  = 0;
-    display_buffer.in_ready = gpu.screen_send;
-    display_buffer.in_data  = gpu.screen_send
-                            ? gpu.screen_data : prev_mem_wdata[0,17];
+    screen_ctrl   .valid    = gpu.screen_valid;
+    screen_ctrl   .in_data  = gpu.screen_valid
+                            ? {1b1,gpu.screen_data} : prev_mem_wdata[0,17];
 
     uo.data_in_ready = 0;
 
@@ -414,7 +399,7 @@ $$end
             }
             case 2b01: {
               // SPIscreen
-              display_buffer.in_ready = 1;
+              screen_ctrl.valid = 1;
             }
             case 2b11: {
               // SPIscreen reset
@@ -457,10 +442,6 @@ $$end
     prev_mem_addr    = mem.addr;
     prev_mem_wenable = mem.wenable;
     prev_mem_wdata   = mem.wdata;
-    // we register the oled inputs to relax fmax
-    screen_send      = screen_send_reg;
-    screen_send_dc   = screen_send_dc_reg;
-    screen_send_byte = screen_send_byte_reg;
 
 $$if SIMULATION then
     // if (iter == 20000000) { __finish(); }

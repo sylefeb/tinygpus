@@ -1,0 +1,57 @@
+// _____________________________________________________________________________
+// |                                                                           |
+// | DMC-1 TinyGPU                                                             |
+// |                                                                           |
+// | Command queue, stores GPU commands in a FIFO                              |
+// | Each command is 64 bits, see DrawCommands.md                              |
+// |                                                                           |
+// | The command queue is not trully part of the GPU but provided as a helper  |
+// | and example of how to implement the queue in a parent SOC.                |
+// |                                                                           |
+// | @sylefeb 2022-07-07                                                       |
+// |___________________________________________________________________________|
+// |                                                                           |
+// |  License: CERN-OHL-S                                                      |
+// |     A copy of the license full text is included in                        |
+// |     the distribution, please refer to it for details.                     |
+// |___________________________________________________________________________|
+
+unit command_queue(
+  input   uint1       in_add,  // pulse to add to the fifo
+  input   uint1       in_next, // pulse to remove current from the fifo
+  input   uint64      in_command,
+  output  uint1       empty,
+  output  uint1       full,
+  output! uint64      current,
+) {
+$$log_n_fifo = 8
+$$n_fifo     = 1<<log_n_fifo
+
+  simple_dualport_bram uint64 fifo[$n_fifo$] = uninitialized;
+
+  uint$log_n_fifo$ waddr($(1<<log_n_fifo)-1$);
+
+  always {
+
+    uint$log_n_fifo$ waddr_p1 <:: waddr + $log_n_fifo$d1;
+    uint1 is_empty            <:: waddr_p1 == fifo.addr0;
+    uint1 near_last           <:: (waddr + $log_n_fifo$d7) == fifo.addr0;
+    uint1 is_full(0);
+
+    // output status
+    empty         = is_empty;
+    full          = is_full;
+    current       = fifo.rdata0;
+    // store?
+    fifo.wenable1 = in_add;
+    fifo.wdata1   = in_command;
+    waddr         = in_add ? waddr_p1 : waddr;
+    fifo.addr1    = waddr;
+    // is_full?
+    is_full       = (in_add  & ~in_next & near_last) ? 1
+                  : (in_next & ~in_add  & near_last) ? 0
+                  : is_full;
+    // next?
+    fifo.addr0    = in_next ? fifo.addr0 + $log_n_fifo$d1 : fifo.addr0;
+  }
+}
