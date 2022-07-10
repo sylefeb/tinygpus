@@ -22,11 +22,9 @@ The tinyGPUs are written in [Silice](https://github.com/sylefeb/Silice), with bi
 There are three main demos: `terrain`, `tetrahedron` and `doomchip-onice`.
 All can be simulated, and currently run on the [mch2022 badge](https://www.bodge.team/docs/badges/mch2022/) and the [icebreaker](https://1bitsquared.com/products/icebreaker) with a SPI screen plugged in the PMOD 1A connector (details below).
 
-<center>
-<img src="docs/terrain.png" width="200px">
-<img src="docs/tetrahedron.png" width="200px">
-<img src="docs/doomchip-onice.png" width="200px">
-</center>
+<table align="center"><tr>
+<td><img src="docs/terrain.png" width="200px"></td> <td><img src="docs/tetrahedron.png" width="200px"></td> <td><img src="docs/doomchip-onice.png" width="200px"></td>
+</tr></table>
 
 The demos are running both on the `icebreaker` board and the `MCH2022` badge.
 
