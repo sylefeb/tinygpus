@@ -8,6 +8,71 @@
 
 #include "memmap.h"
 
+// -----------------------------------------------------
+// Column API
+// -----------------------------------------------------
+
+#define COLDRAW_COL(idx,start,end,light) ((idx) | ((start&255)<<10) | ((end/*>0*/)<<18) | ((light&15)<<26))
+
+#define WALL        (0<<30)
+#define PLANE       (1<<30)
+#define TERRAIN     (2<<30)
+#define PARAMETER   (3<<30)
+
+#define COLDRAW_WALL(y,v_init,u_init) ((  y)/* >0 */) | ((((v_init))&255)<<16) | (((u_init)&255) << 24)
+#define COLDRAW_TERRAIN(st,ed,pick)   (( ed)/* >0 */) | ((st/* > 0*/    )<<16) | (pick)
+#define COLDRAW_PLANE_B(ded,dr)       ((ded) & 65535) | (((dr) & 65535) << 16)
+
+#define PICK        (1<<31)
+#define COLDRAW_EOC (PARAMETER | 1)
+
+// parameter: ray cs (terrain)
+#define PARAMETER_RAY_CS(cs,ss)      (0<<30) | (( cs) & 16383) | ((   ss & 16383 )<<14)
+// parameter: uv offset
+#define PARAMETER_UV_OFFSET(uo,vo)   (1<<30) | ((uo) & 16383) | (((vo) & 16383)<<14)
+// parameter: plane
+#define PARAMETER_PLANE_A(ny,uy,vy)  (2<<30) | ((ny) & 1023)  | (((uy) & 1023)<<10) | (((vy) & 1023)<<20)
+#define PARAMETER_PLANE_DTA(du,dv)   (((du) & 16383)<<1) | (((dv) & 16383)<<15)
+// parameter: terrain view height
+#define PARAMETER_VIEW_Z(view_z)     (3<<30) | (view_z&65535)
+
+#define Y_MAX        65535
+
+// -----------------------------------------------------
+
+static inline void col_send(unsigned int tex0,unsigned int tex1)
+{
+  *COLDRAW0 = tex0;
+  *COLDRAW1 = tex1;
+}
+
+// -----------------------------------------------------
+
+static inline int userdata()
+{
+  int id;
+  asm volatile ("rdtime %0" : "=r"(id));
+  return id;
+}
+
+// -----------------------------------------------------
+
+static inline void col_process()
+{
+  //*LEDS = 1;
+  while ((userdata()&1) == 0) {  }
+  //*LEDS = 0;
+}
+
+static inline void wait_all_drawn()
+{
+	while ((userdata()&4) == 0) { /*wait*/ }
+}
+
+// -----------------------------------------------------
+// Basic CPU functions
+// -----------------------------------------------------
+
 static inline int time()
 {
    int cycles;
@@ -29,13 +94,6 @@ static inline void pause(int cycles)
 #endif
   long tm_start = time();
   while (time() - tm_start < cycles) { }
-}
-
-static inline int userdata()
-{
-  int id;
-  asm volatile ("rdtime %0" : "=r"(id));
-  return id;
 }
 
 static inline int btn_left()
@@ -126,56 +184,6 @@ static inline int printf(const char *fmt,...)
     }
   }
   va_end(ap);
-}
-
-// -----------------------------------------------------
-// Column API
-// -----------------------------------------------------
-
-#define COLDRAW_COL(idx,start,end,light) ((idx) | ((start&255)<<10) | ((end/*>0*/)<<18) | ((light&15)<<26))
-
-#define WALL        (0<<30)
-#define PLANE       (1<<30)
-#define TERRAIN     (2<<30)
-#define PARAMETER   (3<<30)
-
-#define COLDRAW_WALL(y,v_init,u_init) ((  y)/* >0 */) | ((((v_init))&255)<<16) | (((u_init)&255) << 24)
-#define COLDRAW_TERRAIN(st,ed,pick)   (( ed)/* >0 */) | ((st/* > 0*/    )<<16) | (pick)
-#define COLDRAW_PLANE_B(ded,dr)       ((ded) & 65535) | (((dr) & 65535) << 16)
-
-#define PICK        (1<<31)
-#define COLDRAW_EOC (PARAMETER | 1)
-
-// parameter: ray cs (terrain)
-#define PARAMETER_RAY_CS(cs,ss)      (0<<30) | (( cs) & 16383) | ((   ss & 16383 )<<14)
-// parameter: plane
-#define PARAMETER_PLANE_A(ny,uy,vy)  (2<<30) | ((ny) & 1023)  | (((uy) & 1023)<<10) | (((vy) & 1023)<<20)
-#define PARAMETER_PLANE_DTA(du,dv)   (((du) & 16383)<<1) | (((dv) & 16383)<<15)
-// parameter: uv offset
-#define PARAMETER_UV_OFFSET(uo,vo)   (1<<30) | ((uo) & 16383) | (((vo) & 16383)<<14)
-
-#define Y_MAX        65535
-
-// -----------------------------------------------------
-
-static inline void col_send(unsigned int tex0,unsigned int tex1)
-{
-  *COLDRAW0 = tex0;
-  *COLDRAW1 = tex1;
-}
-
-// -----------------------------------------------------
-
-static inline void col_process()
-{
-  //*LEDS = 1;
-  while ((userdata()&1) == 0) {  }
-  //*LEDS = 0;
-}
-
-static inline void wait_all_drawn()
-{
-	while ((userdata()&4) == 0) { /*wait*/ }
 }
 
 // -----------------------------------------------------

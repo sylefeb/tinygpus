@@ -1,6 +1,8 @@
 # TinyGPUs
 *Making graphics hardware like its 1990, explained*
 
+> **This is work in progress**, many parts are not yet written. You're coming too soon, but feel free to peek around!
+
 ## Objectives
 
 The tinyGPUs project started with the following question: *"What would have resembled graphics hardware dedicated to our beloved retro-games from the early 90's, such as Doom 1993 and Comanche 1992?"*. This led me to creating the `dmc-1` GPU, the first (and currently only!) tiny GPU in this repository.
@@ -13,12 +15,24 @@ However, the true objective is to *explore and explain* basic graphics hardware 
 
 > **Note:** There is a plan to do another tiny GPU, hence the **s** in tinyGPUs, exploring different design tradeoffs. But that will come later.
 
-The tinyGPUs are written in [Silice](https://github.com/sylefeb/Silice), with bits and pieces of Verilog.
+The tinyGPUs are written in [Silice](https://github.com/sylefeb/Silice), with bits and pieces of Verilog. Silice has to be installed and in the path, please refer to the [Silice repository](https://github.com/sylefeb/Silice).
 
 ## Running the demos
 
+There are three main demos: `terrain`, `tetrahedron` and `doomchip-onice`.
+All can be simulated, and currently run on the [mch2022 badge](https://www.bodge.team/docs/badges/mch2022/) and the [icebreaker](https://1bitsquared.com/products/icebreaker) with a SPI screen plugged in the PMOD 1A connector (details below).
+
+<center>
+<img src="docs/terrain.png" width="200px">
+<img src="docs/tetrahedron.png" width="200px">
+<img src="docs/doomchip-onice.png" width="200px">
+</center>
+
 The demos are running both on the `icebreaker` board and the `MCH2022` badge.
 
+> **Note:** The build process automatically downloads files, see [here](hardware/common/download_all.sh) and [here](demos/data/get_data.sh).
+
+___
 ### In simulation
 
 For the rotating tetrahedron demo:
@@ -39,6 +53,7 @@ cd demos
 make simulation DEMO=doomchip-onice
 ```
 
+___
 ### On the icebreaker
 
 A [240x320 SPIscreen with a ST7789 driver](https://www.waveshare.com/2inch-lcd-module.htm) has to be hooked to the PMOD 1A, following this pinout:
@@ -70,9 +85,10 @@ make BOARD=icebreaker DEMO=terrain program_all
 onto the board. After doing it once, to test other demos replace `program_all`
 by `program_code`.
 
+___
 ### On the MCH2022 badge
 
-To be written ...
+Plugin the board and type:
 
 ```
 make BOARD=mch2022 DEMO=doomchip-onice program_all MCH2022_PORT=/dev/ttyACM1

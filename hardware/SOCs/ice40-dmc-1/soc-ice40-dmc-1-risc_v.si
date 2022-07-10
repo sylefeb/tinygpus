@@ -36,10 +36,6 @@ $$end
 
 $include('../../common/uart.si')
 
-$$if SIMULATION then
-$$verbose    = nil
-$$end
-
 // A small BRAM contains the bootloader (firmware/boot.c)
 $$bram_depth         = 9
 // Using 320x240 screen
@@ -230,9 +226,7 @@ $$end
   // ==============================
   // GPU
   spiflash_io      sf_io;
-  view             vw;
   DMC_1_gpu gpu(sf           <:>  sf_io,
-                vw           <::> vw,
                 screen_ready <:   screen_ctrl.ready);
 
   // ==============================
@@ -376,9 +370,6 @@ $$end
     // memory mapping
     if ((prev_mem_wenable != 0) & prev_mem_addr[16,1]) {
       switch (prev_mem_addr[2,4]) {
-        case 4b1000: {
-          vw.view_z  = prev_mem_wdata[ 0,16];
-        }
         case 4b0100: {
           // UART
           uo.data_in       = prev_mem_wdata[ 0,8];

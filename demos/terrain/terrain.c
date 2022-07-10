@@ -159,9 +159,12 @@ void main_0()
     wait_all_drawn();
 
     // setup view
-    *VIEW_POS_Z  =  view_z + terrain_z_offset;
-    //                       ^^^^ view_z used for terrain only, this allows a
-    //                            global offset on terrain altitude
+    col_send(
+      PARAMETER_VIEW_Z( view_z + terrain_z_offset ),
+      //                          ^^^^
+      //                          global offset on terrain altitude
+      PARAMETER
+    );
     col_send(
       PARAMETER_UV_OFFSET(view_x,view_y),
       PARAMETER

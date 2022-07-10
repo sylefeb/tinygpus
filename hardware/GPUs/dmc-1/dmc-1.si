@@ -163,11 +163,6 @@ unit texture_sampler(
 
 // ___________________________________________________________________________
 
-group view { // contains view-dependent parameters
-  int16  view_z(0), // view elevation
-  // (there used to be more, but has been simplified away!)
-}
-
 bitfield depth {
   uint1  b, // buffer used when depth was filled
   uint15 d  // depth
@@ -184,7 +179,6 @@ unit span_drawer(
   output uint1               busy(1),
   output uint8               pickedh,
   spiflash_user              sf,
-  input view                 vw,
 ) {
 
 $$terrain_step = 2048
@@ -215,8 +209,9 @@ $$end
   uint1  param    <:: in_command[30,2] == 2b11;   // parameter?
   // on a param decode which data is sent
   uint1  ray_cs   <:: param & (in_command[62,2] == 2b00);
-  uint1  planeA   <:: param & (in_command[63,1]        ); //_ 2b10
+  uint1  planeA   <:: param & (in_command[62,2] == 2b10);
   uint1  uv_offs  <:: param & (in_command[62,2] == 2b01);
+  uint1  set_vwz  <:: param & (in_command[62,2] == 2b11);
   // other
   uint1  pickh    <:: terrain & in_command[63,1]; // pick terrain height?
 
@@ -240,6 +235,7 @@ $$end
   int14  v_offset(0);
 
   // ---- terrain
+  int16  view_z(0);         // view elevation
   uint1  tcol_rdy(0);       // a terrain column is ready (projected height)
   int24  tcol_dist(0);      // terrain column dist from view
   uint24 prev_tcol_dist(0); // previous terrain column dist from view
@@ -380,7 +376,7 @@ $$end
       default: {
         // terrain column height computation, only used if terrain & tcol_rdy
         a     = inv_y.rdata;
-        b     = (__signed({1b0,sampler_io.texel}) - __signed(vw.view_z));
+        b     = (__signed({1b0,sampler_io.texel}) - __signed(view_z));
       }
       // ---- terrain are done
     }
@@ -436,6 +432,8 @@ $$end
       // u,v offsets (plane)
       u_offset           = uv_offs? __signed(in_command[32,14]) : u_offset;
       v_offset           = uv_offs? __signed(in_command[46,14]) : v_offset;
+      // view_z
+      view_z             = set_vwz? __signed(in_command[32,16]) : view_z;
       // plane span data
       ny_inc             = planeA ? __signed(in_command[32,10])       : ny_inc;
       uy_inc             = planeA ? __signed(in_command[42,10])       : uy_inc;
@@ -615,7 +613,6 @@ unit DMC_1_gpu(
   output  uint16      screen_data,
   output  uint8       pickedh,
   spiflash_user       sf,
-  input view          vw,
 ) {
   // column double buffers
   // - first  [0                    .. 2^doomchip_height_p2-1    ]
@@ -626,7 +623,6 @@ unit DMC_1_gpu(
   span_drawer drawer<reginputs>(
     colbufs   <:>  colbufs,
     sf        <:>  sf,
-    vw        <:>  vw,
     pickedh    :>  pickedh,
   );
 
