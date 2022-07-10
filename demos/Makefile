@@ -82,6 +82,7 @@ endif
 mch2022prog:
 	mkdir -p build
 	-wget -nc https://raw.githubusercontent.com/badgeteam/mch2022-tools/master/webusb_fpga.py -O build/webusb_fpga.py
+	chmod 755 build/webusb_fpga.py
 	-wget -nc https://github.com/sylefeb/mch2022-silice/raw/main/qpsram_loader/bitstreams/write.bin -O build/write.bin
 	-wget -nc https://github.com/sylefeb/mch2022-silice/raw/main/qpsram_loader/send.py -O build/send.py
 
