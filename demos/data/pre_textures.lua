@@ -139,9 +139,6 @@ function gettex(tex)
     td = get_image_as_table(path .. 'textures/assembled/' .. tex:upper() .. '.tga')
     truew = #td[1]
     trueh = #td
-    if not standalone_pack then
-      td = tex_vflip(td)
-    end
     td = pad_tex(td)
   elseif nfo.type == 'flat' then
     td = decode_flat_lump(path .. 'lumps/flats/' .. tex .. '.lump')
@@ -151,14 +148,7 @@ function gettex(tex)
     td = get_image_as_table(path .. 'textures/sprites/' .. tex .. '.tga')
     truew = #td[1]
     trueh = #td
-    if not standalone_pack then
-      td = tex_vflip(td)
-    end
     td = pad_tex(td,1)
-  elseif nfo.type == 'weapon' then
-    td = get_image_as_table(path .. 'textures/weapons/' .. tex .. '.tga')
-    truew = #td[1]
-    trueh = #td
   elseif nfo.type == 'terrain' then
     td = get_image_as_table(path .. 'textures/assembled/' .. tex .. '.tga')
     truew = #td[1]
