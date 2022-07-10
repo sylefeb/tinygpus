@@ -172,6 +172,7 @@ end
 
 -- -------------------------------------
 -- parse pnames
+extract_lump('PNAMES')
 local in_pnames = assert(io.open(findfile('lumps/PNAMES.lump'), 'rb'))
 local num_pnames = string.unpack('I4',in_pnames:read(4))
 pnames={}
