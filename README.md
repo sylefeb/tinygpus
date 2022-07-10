@@ -89,8 +89,13 @@ ___
 Plugin the board and type:
 
 ```
+cd demos
 make BOARD=mch2022 DEMO=doomchip-onice program_all MCH2022_PORT=/dev/ttyACM1
 ```
+
+The `program_all` target takes time as it uploads the texture pack. Once done,
+use `program_code` to only upload the compiled code and `program_design` for the
+design only (as long as there is power to the badge).
 
 ## Credits
 - Data files for terrains are downloaded from *s-macke*
