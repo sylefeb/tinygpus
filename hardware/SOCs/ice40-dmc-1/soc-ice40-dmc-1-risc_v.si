@@ -36,10 +36,6 @@ $$end
 
 $include('../../common/uart.si')
 
-$$if SIMULATION then
-$$verbose    = nil
-$$end
-
 // A small BRAM contains the bootloader (firmware/boot.c)
 $$bram_depth         = 9
 // Using 320x240 screen
@@ -57,8 +53,12 @@ $include('../../common/simulation_spram.si')
 $$end
 
 $include('../../GPUs/dmc-1/dmc-1.si')
-$include('../../GPUs/dmc-1/screen.si')
 $include('../../GPUs/dmc-1/command_queue.si')
+$$if MCH2022 then
+$include('../../GPUs/dmc-1/parallel_screen.si')
+$$else
+$include('../../GPUs/dmc-1/spi_screen.si')
+$$end
 
 // configuration for the ice-v-dual
 $$ICEV_MULDIV        = 1
@@ -226,9 +226,7 @@ $$end
   // ==============================
   // GPU
   spiflash_io      sf_io;
-  view             vw;
   DMC_1_gpu gpu(sf           <:>  sf_io,
-                vw           <::> vw,
                 screen_ready <:   screen_ctrl.ready);
 
   // ==============================
@@ -245,11 +243,8 @@ $$end
   );
 
 $$if MCH2022 then
-  parallel_screen screen(
-    valid           <:  screen_valid,
+  screen_driver screen(
     ready            :> screen_ready,
-    data_or_command <:  screen_send_dc,
-    byte            <:  screen_send_byte,
     screen_d         :> lcd_d,
     screen_dc        :> lcd_rs,
     screen_wrn       :> lcd_wr_n
@@ -259,11 +254,8 @@ $$else -- not MCH2022
   uint1 o_clk(0);
   uint1 o_dc(0);
   uint1 o_resn(0);
-  spi_screen screen<@clock2x,!rst2x> (
-    valid           <:  screen_valid,
+  screen_driver screen<@clock2x,!rst2x,reginputs> (
     ready            :> screen_ready,
-    data_or_command <:  screen_send_dc,
-    byte            <:  screen_send_byte,
 $$if VERILATOR then
     screen_mosi      :> oled_mosi,
     screen_clk       :> oled_clk,
@@ -364,6 +356,9 @@ $$end
     screen_ctrl   .valid    = gpu.screen_valid;
     screen_ctrl   .in_data  = gpu.screen_valid
                             ? {1b1,gpu.screen_data} : prev_mem_wdata[0,17];
+    screen.valid            = screen_valid;
+    screen.data_or_command  = screen_send_dc;
+    screen.byte             = screen_send_byte;
 
     uo.data_in_ready = 0;
 
@@ -375,9 +370,6 @@ $$end
     // memory mapping
     if ((prev_mem_wenable != 0) & prev_mem_addr[16,1]) {
       switch (prev_mem_addr[2,4]) {
-        case 4b1000: {
-          vw.view_z  = prev_mem_wdata[ 0,16];
-        }
         case 4b0100: {
           // UART
           uo.data_in       = prev_mem_wdata[ 0,8];
@@ -395,7 +387,7 @@ $$if SIMULATION then
               last_iter = iter;
               if (prev_mem_wdata == 32hffffffff) { __finish(); }
 $$end
-              leds = prev_mem_wdata[0,8];
+              // leds = prev_mem_wdata[0,8];
             }
             case 2b01: {
               // SPIscreen
@@ -442,6 +434,8 @@ $$end
     prev_mem_addr    = mem.addr;
     prev_mem_wenable = mem.wenable;
     prev_mem_wdata   = mem.wdata;
+
+    leds = {$NUM_LEDS-1$b0,cmdq.empty};
 
 $$if SIMULATION then
     // if (iter == 20000000) { __finish(); }

@@ -1,0 +1,154 @@
+// _____________________________________________________________________________
+// |                                                                           |
+// | DMC-1 TinyGPU                                                             |
+// |                                                                           |
+// | Parallel screen controller, takes GPU screen commands and drives a screen |
+// |                                                                           |
+// | The screen controller is not trully part of the GPU but provided as a     |
+// | helper and example of how to implement the controller in a parent SOC.    |
+// |                                                                           |
+// | This controller is for a ILI9341 parallel screen (one byte per clock DDR).|
+// | It is in two parts:                                                       |
+// | - The main controller screen_controller                                   |
+// | - The low level controller unit parallel_screen                           |
+// |                                                                           |
+// | @sylefeb 2022-07-07                                                       |
+// |___________________________________________________________________________|
+// |                                                                           |
+// |  License: CERN-OHL-S                                                      |
+// |     A copy of the license full text is included in                        |
+// |     the distribution, please refer to it for details.                     |
+// |___________________________________________________________________________|
+
+unit screen_controller(
+  input   uint1  valid,
+  output! uint1  ready,
+  input   uint17 in_data,
+  input   uint1  screen_ready,
+  output  uint1  screen_valid,
+  output  uint1  send_dc,
+  output  uint8  send_byte
+) {
+$$if SIMULATION then
+  uint32 cycle(0);
+$$end
+
+  uint16 current_data(0);
+  uint4  current_cfg(0);
+  uint2  working(0);
+
+  // Two modes: in_data[16,1]
+  // - direct 0
+  //     in_data[ 0,8] byte
+  //     in_data[ 8,1] data or command
+  // - pixel 1
+  //     in_data[ 0,8] RG
+  //     in_data[ 8,8] GB
+
+  always {
+
+    uint16 new_data <: in_data[0,16];
+    uint4  new_cfg  <: in_data[16,1]
+                     ? 4b1010                  // two data bytes
+                     : {2b0,1b1,in_data[8,1]}; // one byte, command or data
+
+
+    screen_valid   = 0; // maintain low
+    ready          = 1;
+
+    if (valid) {
+$$if SIMULATION then
+      //__display("[screen_controller %d] [screen_valid] sending",cycle);
+$$end
+      ready = 0;
+      if (screen_ready) {
+        // start sending immediatly if possible
+        send_byte      =   new_data[0,8]; // byte to be sent
+        send_dc        = ~ new_cfg [0,1];  // data or command
+        screen_valid   =   screen_ready & new_cfg[1,1]; // present?
+        current_data   = new_data[8,8];
+        current_cfg    = new_cfg [2,2];
+        working        = 2b01;
+      } else {
+        // record what needs to be sent
+        current_data   = new_data;
+        current_cfg    = new_cfg;
+        working        = 2b11;
+      }
+    } else {
+      send_byte      =   current_data[0,8]; // byte to be sent
+      send_dc        = ~ current_cfg [0,1]; // data or command
+      if (screen_ready & working[0,1]) {
+        // send the current byte
+        screen_valid = current_cfg [1,1]; // present?
+        // move to the next byte
+        current_data = current_data >> 8;
+        current_cfg  = current_cfg  >> 2;
+        working      = working      >> 1;
+      }
+      ready        = ~ working[0,1];
+    }
+
+$$if SIMULATION then
+    if (~ready) {
+      //__display("[screen_controller %d] working:%b",cycle,working);
+    }
+    cycle = cycle + 1;
+$$end
+  }
+}
+
+// ___________________________________________________________________________
+// Registered output DDR buffers for the Ice40
+
+$$if ICE40 then
+import('../Silice/common/projects/ice40_sb_io_ddr.v')
+
+unit sb_io_n(input auto o,output sameas(o) p)
+{
+  $$for i=0,widthof('o')-1 do
+  sb_io _(clock <: clock, out <: o[$i$,1], pin :> p[$i$,1]);
+  $$end
+}
+$$else
+import('../Silice/common/projects/ddr.v')
+$$end
+
+// ___________________________________________________________________________
+// Driver for a ILI9341, parallel screen
+
+unit screen_driver(
+  input  uint1 valid, input  uint1 data_or_command, input  uint8 byte,
+  output uint8 screen_d(0), output uint1 screen_dc(0), output uint1 screen_wrn(1),
+  output uint1 ready(1)
+) {
+
+  uint1 scr_trigger(1);
+  uint8 scr_byte(0);
+  uint1 scr_dc(0);
+$$if ICE40 then
+  uint1 high(1);
+  sb_io_ddr _(clock <: clock, out_0 <: scr_trigger, out_1 <: high, pin :> screen_wrn);
+  sb_io_n   _(o                     <: scr_byte,    p   :> screen_d);
+  sb_io     _(clock <: clock, out   <: scr_dc,      pin :> screen_dc);
+$$else
+  uint2 twice <: {1b1,scr_trigger};
+  ddr       _(clock <: clock, twice <: twice, out_pin :> screen_wrn);
+$$end
+
+  always {
+$$if SIMULATION then
+    screen_d    = scr_byte;
+    screen_dc   = scr_dc;
+$$end
+    scr_byte    =  byte;
+    scr_dc      =  data_or_command;
+    scr_trigger = ~valid;
+$$if SIMULATION then
+    //if (valid) {
+    //  __display("[lcd] sending byte %x, data: %b",byte,data_or_command);
+    //}
+$$end
+  }
+
+}

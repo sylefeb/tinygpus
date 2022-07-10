@@ -4,39 +4,7 @@ Draw commands are made through a basic API; each call requires sending two 32 bi
 
 The GPU allows to draw different types of spans: wall, perspective, terrain and a fourth type that is not a span but a call to specify rendering parameters.
 
-Here are the current defines used by the CPU side API, details of encoding are in the next section.
-
-```c
-#define COLDRAW_COL(idx,start,end,light) ((idx) | ((start&255)<<10) | ((end/*>0*/)<<18) | ((light&15)<<26))
-
-#define WALL        (0<<30)
-#define PERSP       (1<<30)
-#define TERRAIN     (2<<30)
-#define PARAMETER   (3<<30)
-
-#define COLDRAW_WALL(y,v_init,u_init) ((  y)/* >0 */) | ((((v_init))&255)<<16) | (((u_init)&255) << 24)
-#define COLDRAW_TERRAIN(st,ed,pick)   (( ed)/* >0 */) | ((st/* > 0*/    )<<16) | (pick)
-#define COLDRAW_PERSP_B(ded,dr)       ((ded) & 65535) | (((dr) & 65535) << 16)
-
-#define PICK        (1<<31)
-#define COLDRAW_EOC (1 | PARAMETER)
-
-// parameter: ray cs (terrain)
-#define PARAMETER_RAY_CS(cs,ss)      (0<<30) | (( cs) & 16383) | ((   ss & 16383 )<<14)
-// parameter: perspective
-#define PARAMETER_PERSP_A(ny,uy,vy)  (2<<30) | ((ny) & 1023)  | (((uy) & 1023)<<10) | (((vy) & 1023)<<20)
-#define PARAMETER_PERSP_DTA(du,dv)   (((du) & 16383)<<1) | (((dv) & 16383)<<15)
-// parameter: uv offset
-#define PARAMETER_UV_OFFSET(uo,vo)   (1<<30) | ((uo) & 16383) | (((vo) & 16383)<<14)
-
-// -----------------------------------------------------
-
-static inline void col_send(unsigned int tex0,unsigned int tex1)
-{
-  *COLDRAW0 = tex0;
-  *COLDRAW1 = tex1;
-}
-```
+The CPU side API is [here](../../../software/api/api.c).
 
 For instance, to draw a wall from `yf` to `yc` (vertical screen coordinates, `yf <= yc`, if equal 1 pixel is drawn) using light level `seclight` (0-15) and texture id `tid`, at a distance `d` from the user (`d` is the texture coordinate increment for a wall), starting from texture coordinate `tex_v` (initial value of vertical texture coordinate, varies along screen height) and `tc_u` (horizontal texture coordinate, varies along screen width but constant in a column span), use the following call:
 
@@ -61,14 +29,15 @@ Draw command types: wall (00), perspective (01), terrain (10), parameter (11)
 |------------|------------|------------|------------|------------|
 | tag        |  light     |  col end   | col start  | texture id |
 
-NOTE: col_end > col_start or command is ignored, unless end of col
+> col_end > col_start or command is ignored, unless end of col
 
 - `tag == 2b11` (parameter)
 
 |  31-30 (2) | 29(1)  | 28-15 (14) | 14-1 (14) | 0 (1)      |
 |------------|--------|------------|-----------|------------|
 | 2b11       | unused |    dv      |  du       | end of col |
-(note: if `tag == 2b11` and `end of column == 1`, the command is not
+
+> If `tag == 2b11` and `end of column == 1`, the command is not
 passed further and thus there is no confusion with the perspective A data
 case below)
 
@@ -119,4 +88,8 @@ case below)
 |------------|------------|------------|
 |  vy        |  uy        |  ny        |
 
- `tag2==11`, unused
+ `tag2==11`, terrain view height
+
+| 31-16 (16) | 15-0 (16)  |
+|------------|------------|
+|  unused    |  view_z    |
