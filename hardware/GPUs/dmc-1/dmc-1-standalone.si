@@ -1,0 +1,83 @@
+// _____________________________________________________________________________
+// |                                                                           |
+// | DMC-1 TinyGPU, standalone version                                         |
+// |                                                                           |
+// |                                                                           |
+// | @sylefeb 2022-07-10                                                       |
+// |___________________________________________________________________________|
+// |                                                                           |
+// |  License: CERN-OHL-S                                                      |
+// |     A copy of the license full text is included in                        |
+// |     the distribution, please refer to it for details.                     |
+// |___________________________________________________________________________|
+
+$include("dmc-1.si")
+
+$$if spi4x then
+$$error('spi4x not supported by standalone version')
+$$end
+
+$$if not MCH2022 then
+  $include('../../common/spiflash2x.si')
+$$else
+  $include('../../common/qpsram2x.si')
+$$end
+
+// ___________________________________________________________________________
+// The standalone version includes the memory controller
+
+unit DMC_1_gpu_standalone(
+  // command interface
+  input   uint1   valid, // pulse
+  output  uint1   ready,
+  input   uint64  command,
+  // screen interface
+  input   uint1   screen_ready,
+  output  uint1   screen_valid(0),
+  output  uint16  screen_data,
+  // memory interface (SPIflash of QPSRAM)
+  input   uint1   clock2x,
+  output  uint1   ram_clk,
+  output  uint1   ram_csn,
+  inout   uint1   ram_io0,
+  inout   uint1   ram_io1,
+  inout   uint1   ram_io2,
+  inout   uint1   ram_io3,
+) {
+
+  // ==============================
+  // texture memory
+$$if MCH2022 then
+    qpsram_ram txm<@clock2x,reginputs> (
+      ram_clk  :> ram_clk,  ram_csn :>  ram_csn,
+      ram_io0 <:> ram_io0,  ram_io1 <:> ram_io1,
+      ram_io2 <:> ram_io2,  ram_io3 <:> ram_io3,
+    );
+$$else -- not MCH2022
+  $$if spi4x then
+    spiflash_rom txm(
+      clkspi <: clock4x,
+  $$else
+    spiflash_rom txm<@clock2x,reginputs> (
+  $$end
+      sf_clk  :> ram_clk,   sf_csn  :> ram_csn,
+      sf_io0 <:> ram_io0,   sf_io1 <:> ram_io1,
+      sf_io2 <:> ram_io2,   sf_io3 <:> ram_io3,
+    );
+$$end
+
+  // ==============================
+  // GPU
+  texmem_io     txm_io;
+  DMC_1_gpu gpu(txm          <:>  txm_io,
+                <:auto:>);
+
+  always {
+    // memory interface
+    txm.in_ready = txm_io.in_ready;
+    txm.addr     = txm_io.addr;
+    txm_io.data  = txm.rdata;
+    txm_io.busy  = txm.busy;
+  }
+
+}

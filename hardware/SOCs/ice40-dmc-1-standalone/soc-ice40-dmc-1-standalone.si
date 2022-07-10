@@ -1,6 +1,6 @@
 // _____________________________________________________________________________
 // |                                                                           |
-// | DMC-1 TinyGPU, demo SOC with a RISC-V processor (ice-v dual)              |
+// | DMC-1 TinyGPU, demo SOC, standalone, received draw calls through UART     |
 // |                                                                           |
 // | @sylefeb 2020-12-02                                                       |
 // |___________________________________________________________________________|
@@ -11,40 +11,30 @@
 // |___________________________________________________________________________|
 
 // Below we can choose between spiflash 2x or 4x
-// Using 4x would allow faster texture accesses, but is not stable/working yet
-// Using 2x works and allows (some) overclocking
-$$spi4x = nil
+// Using 4x allows faster texture accesses (currently less stable)
+// Using 2x allows (some) overclocking
 
-$$if not MCH2022 then
-$$if spi4x then
-  $$master_freq = 100
-  $$uart_in_clock_freq_mhz = master_freq//4
-  $include('../../common/spiflash4x.si')
-  import('../../common/ice40_half_quarter_clock.v')
+$$uart_bauds = 115200
+
+$$if SIMULATION then
+  $$master_freq = 50
+  $$uart_in_clock_freq_mhz = master_freq//2
 $$else
   $$master_freq = 50
   $$uart_in_clock_freq_mhz = master_freq//2
-  $include('../../common/spiflash2x.si')
   import('../../common/ice40_half_clock.v')
 $$end
-$$else
-  $$master_freq = 50
-  $$uart_in_clock_freq_mhz = master_freq//2
-  $include('../../common/qpsram2x.si')
-  import('../../common/ice40_half_clock.v')
-$$end
+
+$$clean_reset_width = 4
+$include('../../common/clean_reset.si')
 
 $include('../../common/uart.si')
 
-// A small BRAM contains the bootloader (firmware/boot.c)
-$$bram_depth         = 9
 // Using 320x240 screen
 $$ST7789             = 1
-// Use all 128KB of SPRAM
-$$SPRAM_128K         = 1
 
 $$if ICE40 then
-import('../../common/icebrkr_$master_freq$.v')
+import('../../common/plls/icebrkr_$master_freq$.v')
 import('../../common/ice40_spram.v')
 $$end
 
@@ -52,39 +42,13 @@ $$if SIMULATION then
 $include('../../common/simulation_spram.si')
 $$end
 
-$include('../../GPUs/dmc-1/dmc-1.si')
+$include('../../GPUs/dmc-1/dmc-1-standalone.si')
 $include('../../GPUs/dmc-1/command_queue.si')
 $$if MCH2022 then
 $include('../../GPUs/dmc-1/parallel_screen.si')
 $$else
 $include('../../GPUs/dmc-1/spi_screen.si')
 $$end
-
-// configuration for the ice-v-dual
-$$ICEV_MULDIV        = 1
-$$ICEV_FAST_SHIFT    = 1
-$$ICEV_USERDATA      = 1
-$$ICEV_ALU_LATCH     = 1
-$$Boot               = (1<<17)>>2
-$$addrW              = 17
-//_                    ^^ 2^17 (128K) + 1 bit for BRAM + 1 bit for mapping
-//_                    divided by 4 as we address 32 bits words
-group bram_port_io {
-  uint$addrW$ addr(0),
-  uint4       wenable(0),
-  uint32      rdata(0),
-  uint32      wdata(0),
-}
-
-// pre-compilation script, embeds code within string for BRAM and outputs sdcard image
-$$sdcard_image_pad_size = 0
-$$dofile('../../../software/compile/ice40/pre_include_asm.lua')
-$$code_size_bytes = init_data_bytes
-
-$include('../../common/ice-v-dual.si')
-$$clean_reset_width = 4
-$include('../../common/clean_reset.si')
-$include('bram_spram_32bits.si')
 
 // --------------------------------------------------
 // PLL for simulation
@@ -102,6 +66,37 @@ algorithm pll(
     clock2x =  counter[0,1]; // x2 slower
     clock1x = ~counter[1,1]; // x4 slower
     counter =  counter + 1;
+  }
+}
+$$end
+
+// --------------------------------------------------
+// Fake receiver for simulation
+// --------------------------------------------------
+
+$$if SIMULATION then
+$$dofile('simul_command_stream_1.lua')
+unit simul_receiver(io_uart_in io)
+{
+  bram uint8 bytes[] = {$simul_command_stream$};
+
+  io.data_out_ready := 0;
+
+  algorithm <autorun> {
+    uint24 next(0);
+
+    while (next != $6000*8$) {
+      uint8 wait = 1;
+      //__display("next: %d",next);
+      bytes.addr = next;
+      while (wait != 0) {
+        wait = wait + 1;
+      }
+      io.data_out       = bytes.rdata;
+      io.data_out_ready = 1;
+      next = next + 1;
+    }
+    __finish();
   }
 }
 $$end
@@ -159,7 +154,6 @@ $$end
 )
 $$if ICE40 then
 <@clock1x,!rst1x> {
-
 $$if spi4x then
   uint1 clock4x = uninitialized;
   pll pllgen(
@@ -210,24 +204,20 @@ $$else
 $$end
 
   // ==============================
-  // cpu
-  bram_port_io mem;
-
-  bram_spram_32bits bram_ram(
-    pram               <:> mem
-  );
-
-  uint32 user_data(0);
-  rv32i_cpu cpu(
-    user_data        <:: user_data,
-    mem              <:> mem,
-  );
-
-  // ==============================
   // GPU
-  texmem_io     txm_io;
-  DMC_1_gpu gpu(txm          <:>  txm_io,
-                screen_ready <:   screen_ctrl.ready);
+  DMC_1_gpu_standalone gpu(
+    screen_ready <: screen_ctrl.ready,
+    clock2x      <: clock2x,
+$$if MCH2022 then
+    ram_clk  :> ram_clk,  ram_csn :>  ram_csn,
+    ram_io0 <:> ram_io0,  ram_io1 <:> ram_io1,
+    ram_io2 <:> ram_io2,  ram_io3 <:> ram_io3,
+$$else
+    ram_clk  :> sf_clk,  ram_csn :>  sf_csn,
+    ram_io0 <:> sf_io0,  ram_io1 <:> sf_io1,
+    ram_io2 <:> sf_io2,  ram_io3 <:> sf_io3,
+$$end
+  );
 
   // ==============================
   // screen display
@@ -274,27 +264,6 @@ $$if not SIMULATION then
 $$end
 $$end
 
-  // ==============================
-  // texture memory
-$$if MCH2022 then
-    qpsram_ram txm<@clock2x,!rst2x,reginputs> (
-      ram_clk  :> ram_clk,  ram_csn :>  ram_csn,
-      ram_io0 <:> ram_io0,  ram_io1 <:> ram_io1,
-      ram_io2 <:> ram_io2,  ram_io3 <:> ram_io3,
-    );
-$$else -- not MCH2022
-  $$if spi4x then
-    spiflash_rom txm(
-      clkspi <: clock4x,
-  $$else
-    spiflash_rom txm<@clock2x,!rst2x,reginputs> (
-  $$end
-      sf_clk  :> sf_clk,    sf_csn  :> sf_csn,
-      sf_io0 <:> sf_io0,    sf_io1 <:> sf_io1,
-      sf_io2 <:> sf_io2,    sf_io3 <:> sf_io3,
-    );
-$$end
-
 $$if SIMULATION then
   // for simulation, create dummy vars
   uint1 sf_csn(1); uint1 sf_clk(0); uint1 sf_io0(0);
@@ -303,126 +272,92 @@ $$end
 
   // ==============================
   // UART
-  uart_out uo;
+  uart_in  ui;
 $$if UART then
-  uart_sender usend<reginputs>(
-    io      <:> uo,
-    uart_tx :>  uart_tx
+  uart_receiver urecv<reginputs>(
+    io      <:> ui,
+    uart_rx <:  uart_rx
+  );
+$$else
+  simul_receiver urecv<reginputs>(
+    io      <:> ui
   );
 $$end
-
-$$if SIMULATION then
-  uint32 iter(0);
-  uint32 last_iter(0);
-$$end
-
-  sameas(mem.addr)    prev_mem_addr(0);
-  sameas(mem.wenable) prev_mem_wenable(0);
-  sameas(mem.wdata)   prev_mem_wdata(0);
 
   // ==============================
   // command queue
 
   command_queue cmdq(current :> gpu.command);
 
-  // ==============================
-  // main 'loop'
+$$if SIMULATION then
+  uint32 cycle(0);
+$$if ICARUS then
+  uint1 oled_clk(0);
+  uint1 oled_mosi(0);
+  uint1 oled_dc(0);
+  uint1 oled_resn(0);
+  uint1 oled_csn(0);
+$$end
+$$end
+
+  uint1  receiving(0);
+  uint1  all_zeros(1);
+  uint1  next_for_screen(0);
+  uint8  received_byte(8b1);
+  uint64 received(0);
+  uint10 blink(0);
+  uint1  synched(0);
 
   always {
 
-    user_data[0,24] = {
-                      gpu.pickedh,
-                      txm.rdata,
-$$if BUTTONS then
-                      btns[0,3],
-$$else
-                      3b0,
-$$end
-                      1b0,
-                      1b0,
-                      cmdq.empty,
-                      txm.busy,
-                      ~cmdq.full
-                      };
-
-    txm.in_ready    = txm_io.in_ready;
-    txm.addr        = txm_io.addr;
-    txm_io.data     = txm.rdata;
-    txm_io.busy     = txm.busy;
+    uint1 screen_com <:: receiving & received_byte[0,1] & next_for_screen;
 
     gpu           .valid    = 0;
     cmdq          .in_add   = 0;
     cmdq          .in_next  = 0;
-    screen_ctrl   .valid    = gpu.screen_valid;
-    screen_ctrl   .in_data  = gpu.screen_valid
-                            ? {1b1,gpu.screen_data} : prev_mem_wdata[0,17];
+    screen_ctrl   .valid    = (screen_com & ~received[32,1]) | gpu.screen_valid;
+    //                                      ^^^^ indicates screen reset
+    screen_ctrl   .in_data  = gpu.screen_valid ? {1b1,gpu.screen_data}
+                                               : received[0,17];
     screen.valid            = screen_valid;
     screen.data_or_command  = screen_send_dc;
     screen.byte             = screen_send_byte;
 
-    uo.data_in_ready = 0;
+$$if SIMULATION then
+    oled_resn = (screen_com & received[32,1]) ? received[33,1] : oled_resn;
+$$elseif not MCH2022 then
+    o_resn    = (screen_com & received[32,1]) ? received[33,1] : o_resn;
+$$else
+    // lcd_rst_n = (screen_com & received[32,1]) ? received[33,1] : lcd_rst_n;
+$$end
 
 $$if MCH2022 then
     lcd_cs_n  = 0;
     lcd_rst_n = 1;
 $$end
 
-    // memory mapping
-    if ((prev_mem_wenable != 0) & prev_mem_addr[16,1]) {
-      switch (prev_mem_addr[2,4]) {
-        case 4b0100: {
-          // UART
-          uo.data_in       = prev_mem_wdata[ 0,8];
-          uo.data_in_ready = ~uo.busy;
-$$if SIMULATION then
-          __write("%c",prev_mem_wdata[ 0,8]);
-$$end
-        }
-        case 4b0010: {
-          switch (prev_mem_addr[0,2]) {
-            case 2b00: {
-$$if SIMULATION then
-              __display("(cycle %d) LEDs = %d | %d [elapsed %d]",iter,
-                prev_mem_wdata[0,32],__signed( prev_mem_wdata),iter-last_iter);
-              last_iter = iter;
-              if (prev_mem_wdata == 32hffffffff) { __finish(); }
-$$end
-              // leds = prev_mem_wdata[0,8];
-            }
-            case 2b01: {
-              // SPIscreen
-              screen_ctrl.valid = 1;
-            }
-            case 2b11: {
-              // SPIscreen reset
-$$if VERILATOR then
-              oled_resn = ~ prev_mem_wdata[0,1];
-$$elseif not MCH2022 then
-              o_resn    = ~ prev_mem_wdata[0,1];
-$$end
-            }
-            case 2b10: {
-              // texture memory
-              txm.addr     = prev_mem_wdata[0,24];
-              txm.in_ready = 1; // NOTE: we assume there cannot be collisions
-                               // with the texture sampler ; CPU should not
-                               // drive the texture while draw calls are pending
-            }
-            default: { }
-          }
-        }
-        case 4b0001: {
-          if (prev_mem_addr[0,1]) {
-            // received first half
-            cmdq.in_command[32,32] = prev_mem_wdata[0,32];
-          } else {
-            // received second half
-            cmdq.in_command[ 0,32] = prev_mem_wdata[0,32];
-            // store in fifo
-            cmdq.in_add = 1;
-          }
-        }
-        default: { }
+    // show activity
+    leds           = {5{blink[0,1]}};
+    blink          = blink >> 1;
+
+    // received a byte from com
+    if (ui.data_out_ready) {
+      received      = (received << 8) | ui.data_out;
+      received_byte = synched ? {received_byte[0,7],received_byte[7,1]} : 8b1;
+      receiving     = synched;
+      synched       = (ui.data_out == 8haa) | synched;
+      all_zeros     = all_zeros & ~(|ui.data_out);
+    } else {
+      if (receiving & received_byte[0,1]) { // we received a full command (init is null)
+        // store in fifo
+        cmdq.in_command = received;
+        cmdq.in_add     = 1;
+        // done
+        next_for_screen = all_zeros;
+        receiving       = 0;
+        all_zeros       = ~all_zeros; // only once
+        // show activity
+        blink           = 10b1111111111;
       }
     }
 
@@ -430,19 +365,12 @@ $$end
     gpu.valid    = gpu.ready & ~cmdq.empty;
     cmdq.in_next = gpu.ready & ~cmdq.empty;
 
-    // we can take one cycle to refresh the mappings, no need to pressure fmax
-    prev_mem_addr    = mem.addr;
-    prev_mem_wenable = mem.wenable;
-    prev_mem_wdata   = mem.wdata;
-
-    leds = {$NUM_LEDS-1$b0,cmdq.empty};
-
 $$if SIMULATION then
-    // if (iter == 20000000) { __finish(); }
-    iter = iter + 1;
+    cycle = cycle + 1;
 $$end
 
   }
+
 }
 
 // -------------------------

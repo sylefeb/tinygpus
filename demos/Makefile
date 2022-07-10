@@ -3,6 +3,7 @@ BOARD ?= icebreaker
 MCH2022_PORT ?= /dev/ttyACM1
 
 SOC_PATH=../hardware/SOCs/ice40-dmc-1/
+SOC_ALN_PATH=../hardware/SOCs/ice40-dmc-1-standalone/
 SW_PATH =../software/compile/ice40/
 
 $(BOARD) : build/$(BOARD).bin build/$(DEMO).img
@@ -15,6 +16,20 @@ simulation : build/$(DEMO).img build/textures.img $(SOC_PATH)/soc-ice40-dmc-1-ri
 	cat data_tmp.raw build/textures.img > $(SOC_PATH)/data.raw
 	rm rnd.raw data_tmp.raw
 	make -C $(SOC_PATH) -f Makefile verilator
+
+standalone : build/textures.img $(SOC_ALN_PATH)/soc-ice40-dmc-1-standalone.si
+	mkdir -p build
+	make -C $(SOC_ALN_PATH) -f Makefile $(BOARD)
+	cp $(SOC_ALN_PATH)/BUILD_$(BOARD)/build.bin build/$(BOARD)_standalone.bin
+ifeq ($(BOARD),icebreaker)
+	iceprog build/$(BOARD)_standalone.bin
+else
+ifeq ($(BOARD),mch2022)
+	./build/webusb_fpga.py build/$(BOARD)_standalone.bin
+else
+	echo "no yet implemented"
+endif
+endif
 
 build/$(BOARD).bin : $(SOC_PATH)/soc-ice40-dmc-1-risc_v.si
 	mkdir -p build
@@ -90,10 +105,12 @@ ifeq ($(BOARD),mch2022)
 program_all:    mch2022prog
 program_code:   mch2022prog build/$(BOARD).bin
 program_design: mch2022prog
+standalone:     mch2022prog
 endif
 
 clean :
 	rm -rf build
 	make -C data clean
 	make -C $(SOC_PATH) -f Makefile clean
+	make -C $(SOC_ALN_PATH) -f Makefile clean
 	make -C $(SW_PATH) clean
