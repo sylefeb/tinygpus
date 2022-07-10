@@ -88,7 +88,7 @@ mch2022prog:
 
 ifeq ($(BOARD),mch2022)
 program_all:    mch2022prog
-program_code:   mch2022prog
+program_code:   mch2022prog build/$(BOARD).bin
 program_design: mch2022prog
 endif
 
