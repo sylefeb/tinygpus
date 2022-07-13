@@ -191,9 +191,9 @@ $$terrain_step = 2048
 
   // BRAM for 1/y table
   bram uint16 inv_y[2048] = {
-    65535,
-$$for hscr=1,2047 do
-    $65535//(hscr)$,
+    65535,65535,
+$$for hscr=2,2047 do
+    $65536//(hscr)$,
     //    ^^ Lua integer division
 $$end
   };
