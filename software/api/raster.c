@@ -385,6 +385,7 @@ static inline void surface_frame_setup(surface *s,trsf_surface *ts,
   ts->nx = s->nx; ts->ny = s->ny; ts->nz = s->nz;
   ts->ux = s->ux; ts->uy = s->uy; ts->uz = s->uz;
   ts->vx = s->vx; ts->vy = s->vy; ts->vz = s->vz;
+  // transform plane vectors
   trsf(time, &ts->nx,&ts->ny,&ts->nz);
   trsf(time, &ts->ux,&ts->uy,&ts->uz);
   trsf(time, &ts->vx,&ts->vy,&ts->vz);
@@ -426,3 +427,5 @@ static inline void surface_step(trsf_surface *s,int rx,int ry,int rz)
     PARAMETER_PLANE_DTA(du,dv) | PARAMETER
   );
 }
+
+// ____________________________________________________________________________

@@ -133,7 +133,7 @@ What my talk does *not* explain, however, is the perspective correct texturing a
 
 As explained in the talk, all surfaces here are either entirely vertical (walls) or entirely horizontal (flats). Both cases allow a simplification enabling perspective correct texturing *without* having to perform a division in every pixel. In fact, the original Doom engine renders walls as vertical spans and flats as horizontal spans precisely for this reason (through the famous *visplane* data-structure for the latter, which the original code has a few things to say about: [`Here comes the obnoxious "visplane"`](https://github.com/id-Software/DOOM/blob/77735c3ff0772609e9c8d29e3ce2ab42ff54d20b/linuxdoom-1.10/r_plane.c#L51), [`Now what is a visplane, anyway?`](https://github.com/id-Software/DOOM/blob/77735c3ff0772609e9c8d29e3ce2ab42ff54d20b/linuxdoom-1.10/r_defs.h#L458))
 
-This per-pixel division is a big deal, because divisions are either slow (many cycles) or use a tone of logic (many LUTs), or both! Now let's have a look at a more general surface, like this textured triangle in the tetrahedron demo:
+This per-pixel division is a big deal, because divisions are either slow (many cycles) or use a ton of logic (many LUTs), or both! Now let's have a look at a more general surface, like this textured triangle in the tetrahedron demo:
 
 <center><img src="docs/tetrahedron.png" width="400px"></center>
 
@@ -141,27 +141,27 @@ This is more general because clearly the perspective is not 'axis aligned' with 
 
 > I call *free texture mapping* the general case where u,v coordinates would be assigned to the triangle vertices and used to interpolate texture coordinates across the triangle surface. This interpolation also requires the per-pixel division, but I don't have a clever trick to escape this one!!
 
-One possible approach to deal with this case is the so called z-constant raterization. This is not a very common technique and, afaik, there are not many descriptions or implementations of it. I found a description in this highly enjoyable treasure trove: an archive of the *PC Game Programmer's Encyclopedia*: [Free Direction Texture Mapping](http://qzx.com/pc-gpe/fdtm.txt) by Hannu Helminen (alongside [another article on texturing](http://qzx.com/pc-gpe/texture.txt) by Sean Barrett).
+One possible approach to deal with this case is the so called z-constant raterization. This is not a very common technique and, afaik, there are not many descriptions or implementations of it. I found a description in this highly enjoyable treasure trove: an archive of the *PC Game Programmer's Encyclopedia*: [Free Direction Texture Mapping](http://qzx.com/pc-gpe/fdtm.txt) by Hannu Helminen (alongside [another great article on texturing](http://qzx.com/pc-gpe/texture.txt) by Sean Barrett).
 
-This sounds great but I was not too keen on implementing it. Then, I looked back at how I dealt with flats in the *Doomchip onice*. You see, because I am drawing *only* vertical span, producing the screen column after column, I could not do horizontal spans like the original engine. Thus I had to deal with the perspective effect during texturing, and avoid the per-pixel division. Well, I did not *avoid it*, because it is required, but instead I *precomputed* it. Here is a figure detailing the idea (my talk features an [animated version](https://youtu.be/2ZAIIDXoBis?t=1313)):
+This sounds good but I was not too keen on implementing it. Then, I looked back at how I dealt with flats in the *Doomchip onice*. You see, because I am drawing *only* vertical span, producing the screen column after column, I could not do horizontal spans like the original engine. Thus I had to deal with the perspective effect during texturing, and avoid the per-pixel division. Well, I did not *avoid it*, because it is required, but instead I *precomputed* it. Here is a figure detailing the idea (my talk features an [animated version](https://youtu.be/2ZAIIDXoBis?t=1313)):
 
 <center><img src="docs/fig_inv_y.png" width="600px"></center>
 
-On the left the screen view (each cell of the grid is a pixel). The blue column is being drawn as a piece of floor. On the right, the side view with the player eye to the left and the view ray through a pixel as a blue line. We get the *u* coordinate from the column *x* position on screen but need to compute the *v* coordinate, that is also the distance to the viewer, *z*. This is the one that requires a division, in this particular case by *y_screen*. The good news is that because *y_screen* is limited to the screen height, this can be pre-computed in a table. That is at the root of a good old demoscene trick: the [fly-over plane effect](https://github.com/sylefeb/Silice/blob/master/projects/vga_demo/vga_flyover3d.si):
+On the left the screen view (each cell of the grid is a pixel). The blue column is being drawn as a piece of floor. On the right, the side view with the player eye to the left and the view ray through a pixel as a blue line. We get the *u* coordinate from the column *x* position on screen but need to compute the *v* coordinate, that is also the distance to the viewer, *z*. This is the one that requires a division, in this particular case by *y_screen*. The good news is that because *y_screen* is limited to the screen height, this can be pre-computed in a table. That is at the root of a good old [demoscene effect](https://github.com/sylefeb/Silice/blob/master/projects/vga_demo/vga_flyover3d.si):
 
 <center><img src="https://github.com/sylefeb/Silice/raw/master/projects/vga_demo/vga_demo_flyover3d.png" width="300px"></center>
 
 Thanks to the limited range of values (screen height), this fits in a small table that is stored in a specialized FPGA memory called a BRAM. So that's highly efficient in practice.
 
-> To be precise, given a value $n$ that goes from $1$ to $N$, we precompute a table $T$ of $N$ entries. Choose a large value $M$, typically if the table stores $b$ bits integers pick $M = 2^b$. Then precompute all $T[n] = \frac{M}{n}$ (clamp to $M-1$ when $n = 1$). For this trick to be reasonable we need $N$ to be bounded and not too large, which was the case here. You can see how the table used by the GPU is generated by the pre-processor [here](https://github.com/sylefeb/tinygpus/blob/main/hardware/GPUs/dmc-1/dmc-1.si#L192-L199).
+> To be precise, given a value $n$ that goes from $1$ to $N$, we precompute a table $T$ of $N$ entries. Choose a large value $M$, typically if the table stores $b$ bits integers pick $M = 2^b$. Then precompute all $T[n] = \frac{M}{n}$ (clamp to $M-1$ when $n = 1$). For this trick to be reasonable we need $N$ to be bounded and not too large, which was the case here ($N$ being half the screen height). You can see how the table used by the GPU is generated by the pre-processor [here](https://github.com/sylefeb/tinygpus/blob/main/hardware/GPUs/dmc-1/dmc-1.si#L192-L199).
 
 > Quick note on how to  use the precomputed division table. Let us assume we want to compute $\frac{x}{n}$, instead we will compute `(x . T[n]) >> b`, where the division by M is replaced by a shift of $b$ bits to the right (or less if we want to keep a fixed point result). Take care that the product $x . T[n]$ does not overflow.
 
 How is this relevant to planar perspective correct texturing? Well, the question is how to generalize this principle and, more importantly, whether the required division would also be limited in range so it could be pre-computed in a small-size table.
 
-It turns out that the answer is yes! To understand why we have to take a different point of view, and see this as a [raytracing](https://en.wikipedia.org/wiki/Ray_tracing_(graphics)) question: Given a view ray, how do we compute the *u,v* texture coordinate when hitting a plane? There are good explanations [on this page](https://www.scratchapixel.com/lessons/3d-basic-rendering/minimal-ray-tracer-rendering-simple-shapes/ray-plane-and-ray-disk-intersection), so I won't repeat these in details here. The important point, however, is that computing these coordinates involves only dividing by the dot product of the plane normal and view ray direction (see the expression of `t` in the aforementioned page). That is good new because both vectors are *unit vectors*, so their dot product is necessarily in $[-1,1]$, giving us a limited range indeed. We can stay within $[0,1]$ by only considering front facing planes, then remap the range to $[1,N]$ and precompute divisions of a base value $M$ by this range. This is not very precision around 0, but that is when the plane is almost aligned with the view ray ('flat horizon') so we can't see much anyway.
+It turns out that the answer is yes! To understand why, we have to take a different point of view, and see this as a [raytracing](https://en.wikipedia.org/wiki/Ray_tracing_(graphics)) question: Given a view ray, how do we compute the *u,v* texture coordinate when hitting a plane? There are good explanations [on this page](https://www.scratchapixel.com/lessons/3d-basic-rendering/minimal-ray-tracer-rendering-simple-shapes/ray-plane-and-ray-disk-intersection), so I won't repeat these in details here. The important point, however, is that computing these coordinates involves only dividing by the dot product of the plane normal and view ray direction (see the expression of `t` in the aforementioned page). That is good new because both vectors are *unit vectors*, so their dot product is necessarily in $[-1,1]$, giving us a limited range indeed. We can stay within $[0,1]$ by only considering front facing planes, then remap the range to $[1,N]$ and precompute divisions of a base value $M$ by this range. This is not very precise around 0, but that is when the plane is almost aligned with the view ray ('flat horizon') so we can't see much anyway.
 
-And that's about it for the main trick enabling perspective correct planar texturing. In the API these are the `COLDRAW_PLANE_B` span types, which before require setup calls using `PARAMETER_PLANE_A` (specifying the normal, u and v coordinate derivatives along the y axis). An example of using the planar spans can be seen in the [Doomchip on-ice](demos/doomchip-onice/doomchip-onice.c) (simplified here for readability):
+And that's about it for the main trick enabling perspective correct *planar* texturing. In the API these are the `COLDRAW_PLANE_B` span types, which require first some setup, using `PARAMETER_PLANE_A` (specifying the normal, u and v axis coordinate along the screen y axis). An example of using the planar spans can be seen in the [Doomchip on-ice](demos/doomchip-onice/doomchip-onice.c) (simplified here for readability):
 
 ```c
     // setup per-column
@@ -181,16 +181,16 @@ And that's about it for the main trick enabling perspective correct planar textu
     );
 
 ```
-Planar spans are only used for horizontal floors/ceilings in this demo, since walls use simpler vertical spans.
+Planar spans are only used for horizontal floors/ceilings in this demo, since walls use simpler vertical spans. Because the surfaces are horizontal, the parameters to `PARAMETER_PLANE_A` are `256,0,0`: only the normal varies with the $y$ axis.
 
-A more general use can be seen in the [tetrahedron demo](demos/tetrahedron/tetrahedron.c). In this demo the triangles are rasterized into spans on the CPU ; this can be seen in the file [raster.c](software/api/raster.c) that contains detailed comments on the process too.
+A more general use can be seen in the [tetrahedron demo](demos/tetrahedron/tetrahedron.c). In this demo the triangles are rasterized into spans on the CPU ; this can be seen in the file [raster.c](software/api/raster.c) that contains detailed comments on that process too.
 
 ___
 ## Discussion
 
 The `DMC-1` is unusual in that it renders the screen column by column, in order. This specific choice is motivated by the fact that we stream pixels to a SPI screen that features a framebuffer, so we do not have to spend precious memory on a framebuffer FPGA-side. Also, this allows the use of a one column depth buffer, a luxury enabling simpler drawing of scenes containing both the terrain, buildings and sprites.
 
-This however imposes a specific draw order CPU side which is not always comfortable. That is why a second tinyGPU, using a different approach and likely an additional external memory is planned ;)
+This however imposes a specific draw order CPU side which is not always comfortable. That is why a second tinyGPU, using a different approach and likely an additional (writable) external memory is planned ;)
 
 ___
 ## Credits
