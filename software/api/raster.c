@@ -285,7 +285,6 @@ typedef struct {
   int nx,ny,nz;
   int ux,uy,uz;
   int vx,vy,vz;
-  int dr; int ded;
 } surface;
 
 typedef struct {
@@ -374,24 +373,24 @@ static inline void surface_pre(surface *s,int p0,int p1,int p2,const p3d *pts)
 
 // ____________________________________________________________________________
 // Transform callback
-typedef void (*f_transform)(int time,int *x,int *y,int *z);
+typedef void (*f_transform)(int *x,int *y,int *z);
 
 // ____________________________________________________________________________
-// Prepares a surface for the current frame
-static inline void surface_frame_setup(surface *s,trsf_surface *ts,
-                                       int view_dist,int time,
-                                       f_transform trsf,const p3d *points)
+// Transform a surface with the current transform and view distance
+static inline void surface_transform(surface *s,trsf_surface *ts,
+                                     int view_dist,f_transform trsf,
+                                     const p3d *points)
 {
   ts->nx = s->nx; ts->ny = s->ny; ts->nz = s->nz;
   ts->ux = s->ux; ts->uy = s->uy; ts->uz = s->uz;
   ts->vx = s->vx; ts->vy = s->vy; ts->vz = s->vz;
   // transform plane vectors
-  trsf(time, &ts->nx,&ts->ny,&ts->nz);
-  trsf(time, &ts->ux,&ts->uy,&ts->uz);
-  trsf(time, &ts->vx,&ts->vy,&ts->vz);
+  trsf(&ts->nx,&ts->ny,&ts->nz);
+  trsf(&ts->ux,&ts->uy,&ts->uz);
+  trsf(&ts->vx,&ts->vy,&ts->vz);
   // uv translation
   p3d p0     = points[s->p0];
-  trsf(time, &p0.x,&p0.y,&p0.z);
+  trsf(&p0.x,&p0.y,&p0.z);
   p0.z      += view_dist;
   ts->u_offs = dot3( p0.x,p0.y,p0.z, ts->ux,ts->uy,ts->uz ) >> 10;
   ts->v_offs = dot3( p0.x,p0.y,p0.z, ts->vx,ts->vy,ts->vz ) >> 10;
@@ -406,7 +405,7 @@ static inline void surface_frame_setup(surface *s,trsf_surface *ts,
 
 // ____________________________________________________________________________
 // Sets surface UV parameters
-static inline void surface_set_params(trsf_surface *s)
+static inline void surface_bind(trsf_surface *s)
 {
   col_send(
     PARAMETER_UV_OFFSET(s->u_offs,s->v_offs),
@@ -415,8 +414,8 @@ static inline void surface_set_params(trsf_surface *s)
 }
 
 // ____________________________________________________________________________
-// Sets surface stepping parameters
-static inline void surface_step(trsf_surface *s,int rx,int ry,int rz)
+// Set surface parameters for the span
+static inline void surface_set_span(trsf_surface *s,int rx,int ry,int rz)
 {
   s->dr  = dot3( rx,ry,rz, s->nx,s->ny,s->nz )>>8;
   int du = dot3( rx,ry,rz, s->ux,s->uy,s->uz )>>8;

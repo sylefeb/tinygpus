@@ -38,7 +38,7 @@ static inline void rot_y(int angle, int *x, int *y, int *z)
 }
 
 // -----------------------------------------------------
-// Global game state
+// Global state
 // -----------------------------------------------------
 
 // frame
@@ -77,7 +77,9 @@ surface srfs[4];
 
 // -----------------------------------------------------
 
-static inline void transform(int angle, int *x, int *y, int *z)
+int angle;
+
+static inline void transform(int *x, int *y, int *z)
 {
   rot_y(angle   , x,y,z);
   rot_z(angle>>1, x,y,z);
@@ -88,21 +90,21 @@ static inline void transform(int angle, int *x, int *y, int *z)
 // draws all screen columns
 static inline void render_frame()
 {
-  // animation time
-  int time = frame << 6;
+  // animation angle
+  angle = frame << 6;
 
 	// transform the points
  	for (int i = 0; i < 4; ++i) {
     p3d p = points[i];
-    transform(time, &p.x,&p.y,&p.z);
-		project  (&p,   &trsf_points[i]);
+    transform(&p.x,&p.y,&p.z);
+		project(&p, &trsf_points[i]);
  	}
   trsf_surface tsrfs[4];
 	rconvex      rtris[4];
   const int *idx =  indices;
   for (int s = 0 ; s < 4 ; ++ s) {
-    // setup the textured surface for rendering at this frame
-    surface_frame_setup(&srfs[s], &tsrfs[s], view_dist, time, transform, points);
+    // transform the textured surfaces for rendering at this frame
+    surface_transform(&srfs[s], &tsrfs[s], view_dist, transform, points);
     // prepare triangle rasterization
 	  rconvex_init(&rtris[s], 3,idx, trsf_points);
     idx += 3;
@@ -111,6 +113,7 @@ static inline void render_frame()
 	// before drawing cols wait for previous frame
   wait_all_drawn();
 
+  int bound_s = -1;
   for (int c = 0; c < SCREEN_WIDTH ; ++c) {
 
     const int *idx =  indices;
@@ -124,12 +127,15 @@ static inline void render_frame()
         int rx = c           - 160;
         int ry = rtris[s].ys - 100;
 
-        surface_step(&tsrfs[s], rx,ry,rz);
-        surface_set_params(&tsrfs[s]);
+        if (s != bound_s) {
+          surface_bind    (&tsrfs[s]);
+          bound_s = s;
+        }
 
         int light = (tsrfs[s].nz>>4);
         if (light > 15) light = 15;
 
+        surface_set_span(&tsrfs[s], rx,ry,rz);
         col_send(
           COLDRAW_PLANE_B(tsrfs[s].ded,tsrfs[s].dr),
           COLDRAW_COL(125/*texture id*/, rtris[s].ys,rtris[s].ye, light) | PLANE
