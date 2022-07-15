@@ -1,7 +1,7 @@
 # TinyGPUs
 *Making graphics hardware like its 1990, explained*
 
-> **This is work in progress**, many parts are not yet written. You're coming too soon, but feel free to peek around!
+> **This is work in progress**. You're coming too soon, but feel free to peek around!
 
 ## Objectives
 
