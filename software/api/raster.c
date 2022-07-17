@@ -407,16 +407,19 @@ static inline void surface_transform(surface *s,trsf_surface *ts,
 // Sets surface UV parameters
 static inline void surface_bind(trsf_surface *s)
 {
+#ifndef EMUL
   col_send(
     PARAMETER_UV_OFFSET(s->u_offs,s->v_offs),
     PARAMETER
   );
+#endif
 }
 
 // ____________________________________________________________________________
 // Set surface parameters for the span
 static inline void surface_set_span(trsf_surface *s,int rx,int ry,int rz)
 {
+#ifndef EMUL
   s->dr  = dot3( rx,ry,rz, s->nx,s->ny,s->nz )>>8;
   int du = dot3( rx,ry,rz, s->ux,s->uy,s->uz )>>8;
   int dv = dot3( rx,ry,rz, s->vx,s->vy,s->vz )>>8;
@@ -425,6 +428,7 @@ static inline void surface_set_span(trsf_surface *s,int rx,int ry,int rz)
     PARAMETER_PLANE_A(s->ny,s->uy,s->vy),
     PARAMETER_PLANE_DTA(du,dv) | PARAMETER
   );
+#endif
 }
 
 // ____________________________________________________________________________

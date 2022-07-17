@@ -69,6 +69,19 @@ else
 endif
 endif
 
+program_data: build/textures.img
+ifeq ($(BOARD),icebreaker)
+	iceprog -o 2M build/textures.img
+else
+ifeq ($(BOARD),mch2022)
+	./build/webusb_fpga.py build/write.bin
+	sleep 0.5
+	python ./build/send.py $(MCH2022_PORT) 2097152 build/textures.img
+else
+	echo "no yet implemented"
+endif
+endif
+
 program_design: build/$(BOARD).bin
 ifeq ($(BOARD),icebreaker)
 	iceprog build/$(BOARD).bin

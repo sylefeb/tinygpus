@@ -3,8 +3,6 @@
 
 > **This is work in progress**. You're coming too soon, but feel free to peek around!
 
-## Objectives
-
 The tinyGPUs project started with the following question: *"What would have resembled graphics hardware dedicated to our beloved retro-games from the early 90's, such as Doom 1993 and Comanche 1992?"*. This led me to creating the `DMC-1` GPU, the first (and currently only!) tiny GPU in this repository.
 
 > **Note:** `DMC` stands for *Doom Meets Comanche*... also, it sounds cool (any resemblance to a car name is of course pure coincidence).
@@ -54,6 +52,20 @@ make simulation DEMO=doomchip-onice
 ```
 
 ___
+### On the MCH2022 badge
+
+Plugin the board and type:
+
+```
+cd demos
+make BOARD=mch2022 DEMO=doomchip-onice program_all MCH2022_PORT=/dev/ttyACM1
+```
+
+The `program_all` target takes time as it uploads the texture pack. Once done,
+use `program_code` to only upload the compiled code and `program_design` for the
+design only (as long as there is power to the badge).
+
+___
 ### On the icebreaker
 
 A [240x320 SPIscreen with a ST7789 driver](https://www.waveshare.com/2inch-lcd-module.htm) has to be hooked to the PMOD 1A, following this pinout:
@@ -84,20 +96,6 @@ make BOARD=icebreaker DEMO=terrain program_all
 > **Note:** `program_all` takes a long time as it transfers the texture data
 onto the board. After doing it once, to test other demos replace `program_all`
 by `program_code`.
-
-___
-### On the MCH2022 badge
-
-Plugin the board and type:
-
-```
-cd demos
-make BOARD=mch2022 DEMO=doomchip-onice program_all MCH2022_PORT=/dev/ttyACM1
-```
-
-The `program_all` target takes time as it uploads the texture pack. Once done,
-use `program_code` to only upload the compiled code and `program_design` for the
-design only (as long as there is power to the badge).
 
 ___
 ## The DMC-1 design
