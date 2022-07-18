@@ -14,9 +14,6 @@ Quick links:
   - [Discussion](#discussion)
 - [Credits](#credits)
 
-<!-- MARKDOWN-AUTO-DOCS:START (CODE:src=./demos/triangles/triangles.c) -->
-<!-- MARKDOWN-AUTO-DOCS:END -->
-
 The tinyGPUs project started with the following question: *"What would have resembled graphics hardware dedicated to our beloved retro-games from the early 90's, such as Doom 1993 and Comanche 1992?"*. This led me to creating the `DMC-1` GPU, the first (and currently only!) tiny GPU in this repository.
 
 > **Note:** `DMC` stands for *Doom Meets Comanche*... also, it sounds cool (any resemblance to a car name is of course pure coincidence).
