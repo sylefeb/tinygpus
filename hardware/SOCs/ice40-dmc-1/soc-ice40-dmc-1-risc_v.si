@@ -387,7 +387,7 @@ $$if SIMULATION then
               last_iter = iter;
               if (prev_mem_wdata == 32hffffffff) { __finish(); }
 $$end
-              // leds = prev_mem_wdata[0,8];
+              leds = prev_mem_wdata[0,8];
             }
             case 2b01: {
               // SPIscreen
@@ -435,7 +435,9 @@ $$end
     prev_mem_wenable = mem.wenable;
     prev_mem_wdata   = mem.wdata;
 
-    leds = {$NUM_LEDS-1$b0,cmdq.empty};
+    // uncomment to visualize GPU bound vs CPU bound
+    //                          vvvvvvv    vvvvvvv
+    // leds = {$NUM_LEDS-2$b0,cmdq.full,cmdq.empty};
 
 $$if SIMULATION then
     // if (iter == 20000000) { __finish(); }

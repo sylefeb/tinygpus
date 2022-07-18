@@ -72,7 +72,7 @@ const int indices[12] = {
   2,0,3,
 };
 
-p3d     trsf_points[4];
+p3d     prj_points[4];
 surface srfs[4];
 
 // -----------------------------------------------------
@@ -100,7 +100,7 @@ static inline void render_frame()
  	for (int i = 0; i < 4; ++i) {
     p3d p = points[i];
     transform(&p.x,&p.y,&p.z,1);
-		project(&p, &trsf_points[i]);
+		project(&p, &prj_points[i]);
  	}
   trsf_surface tsrfs[4];
 	rconvex      rtris[4];
@@ -109,7 +109,7 @@ static inline void render_frame()
     // transform the textured surfaces for rendering at this frame
     surface_transform(&srfs[s], &tsrfs[s], transform, points);
     // prepare triangle rasterization
-	  rconvex_init(&rtris[s], 3,idx, trsf_points);
+	  rconvex_init(&rtris[s], 3,idx, prj_points);
     idx += 3;
   }
 
@@ -124,7 +124,7 @@ static inline void render_frame()
 
       if (c >= rtris[s].x && c <= rtris[s].last_x && tsrfs[s].ded > 0) {
 
-        rconvex_step(&rtris[s],  3,idx, trsf_points);
+        rconvex_step(&rtris[s],  3,idx, prj_points);
 
         int rz = 256;
         int rx = c           - SCREEN_WIDTH/2;
