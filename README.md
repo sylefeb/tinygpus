@@ -10,7 +10,8 @@ Quick links:
   - [On the icebreaker](#on-the-icebreaker)
 - [The DMC-1 GPU design](#the-dmc-1-design)
   - [Context](#context)
-  - [Perspective correct texturing](#perspective-correct-texturing)
+  - [On perspective correct texturing](#on-perspective-correct-texturing)
+  - [Design walkthrough](#design-walkthrough)
   - [Discussion](#discussion)
 - [Credits](#credits)
 
@@ -134,15 +135,17 @@ The `DMC-1` is my take on this. Thinking beyond Doom, I thought I should also su
 
 In terms of resources, I decided to primarily target the Lattice ice40 UP5K. First, this is the platform used by [the incredible source port on custom SOC by Sylvain Munaut](https://www.youtube.com/watch?v=3ZBAZ5QoCAk). Targeting anything bigger would have seemed too easy. Second, the UP5K is fairly slow (validating timing at 25 MHz is good, anything above is *very* good), and has 'only' 5K LUTs (that's not so small though, [1K LUTs can run a full 32 bits RISCV dual-core processor!](https://github.com/sylefeb/Silice/blob/master/projects/ice-v/IceVDual.md)). So this makes for a good challenge. On the upside, the UP5K has 8 DSPs (great for fast multipliers!) and 128KB of SPRAM, a fast one-cycle read/write memory. So this gives hope something can actually be achieved. Plus of course, the SPIflash ROM that is typically hooked alongside FPGAs for their configuration. These are to be considered read only (writing is very, very slow), and while reading takes multiple cycles to initialize a random access, performance is far from terrible.
 
-At this point, you might want to watch [my video on the Doomchip on-ice](https://youtu.be/2ZAIIDXoBis) or [browse the slides here](https://www.antexel.com/doomchip_onice_rc3/). This explains how the initial design of the `DMC-1` was achieved, including perspective correct texturing for walls and flats (floors and ceilings) as well as the terrain rendering.
+At this point, you might want to watch [my video on the Doomchip on-ice](https://youtu.be/2ZAIIDXoBis), [browse the slides here](https://www.antexel.com/doomchip_onice_rc3/) or read the [detailed design walkthrough](docs/DMC-1-walkthrough.md). This explains how the initial design of the `DMC-1` was achieved, including perspective correct texturing for walls and flats (floors and ceilings) as well as the terrain rendering.
 
-### Perspective correct texturing
+### On perspective correct texturing
 
-What my talk does *not* explain, however, is the perspective correct texturing achieved on arbitrary slanted surfaces such as in the tetrahedron demo (because I did not know how to do that back then!). Consider this screenshot of E1M1:
+An interesting capability of the DMC-1 is that it can achieve perspective correct texturing on arbitrary slanted surfaces, such as in the tetrahedron demo.
+
+The reason this is interesting is because most games of the era (1) where limiting perspective correct texturing to special cases. Consider this screenshot of E1M1:
 
 <center><img src="docs/doomchip-onice.png" width="400px"/></center>
 
-As explained in the talk, all surfaces here are either entirely vertical (walls) or entirely horizontal (flats). Both cases allow a simplification enabling perspective correct texturing *without* having to perform a division in every pixel. In fact, the original Doom engine renders walls as vertical spans and flats as horizontal spans precisely for this reason (through the famous *visplane* data-structure for the latter, which the original code has a few things to say about: [`Here comes the obnoxious "visplane"`](https://github.com/id-Software/DOOM/blob/77735c3ff0772609e9c8d29e3ce2ab42ff54d20b/linuxdoom-1.10/r_plane.c#L51), [`Now what is a visplane, anyway?`](https://github.com/id-Software/DOOM/blob/77735c3ff0772609e9c8d29e3ce2ab42ff54d20b/linuxdoom-1.10/r_defs.h#L458))
+All surfaces here are either entirely vertical (walls) or entirely horizontal (flats). Both cases allow a simplification enabling perspective correct texturing *without* having to perform a division in every pixel. In fact, the original Doom engine renders walls as vertical spans and flats as horizontal spans precisely for this reason (through the famous *visplane* data-structure for the latter, which the original code has a few things to say about: [*Here comes the obnoxious "visplane"*](https://github.com/id-Software/DOOM/blob/77735c3ff0772609e9c8d29e3ce2ab42ff54d20b/linuxdoom-1.10/r_plane.c#L51) and [*Now what is a visplane, anyway?*](https://github.com/id-Software/DOOM/blob/77735c3ff0772609e9c8d29e3ce2ab42ff54d20b/linuxdoom-1.10/r_defs.h#L458))
 
 This per-pixel division is a big deal, because divisions are either slow (many cycles) or use a ton of logic (many LUTs), or both! Now let's have a look at a more general surface, like this textured triangle in the tetrahedron demo:
 
@@ -195,6 +198,10 @@ And that's about it for the main trick enabling perspective correct *planar* tex
 Planar spans are only used for horizontal floors/ceilings in this demo, since walls use simpler vertical spans. Because the surfaces are horizontal, the parameters to `PARAMETER_PLANE_A` are `256,0,0`: only the normal varies with the $y$ axis.
 
 A more general use can be seen in the [tetrahedron demo](demos/tetrahedron/tetrahedron.c). In this demo the triangles are rasterized into spans on the CPU ; this can be seen in the file [raster.c](software/api/raster.c) that contains detailed comments on that process too.
+
+### Design walkthrough
+
+I prepared a walkthrough of the [Silice](https://github.com/sylefeb/Silice) design in [this separate page](./docs/DMC-1-walkthrough.md).
 
 ### Discussion
 
