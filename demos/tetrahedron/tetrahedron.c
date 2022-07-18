@@ -52,8 +52,8 @@ static inline void project(const p3d* pt, p3d *pr)
 {
 	int z     = pt->z + view_dist; // view space
 	int inv_z = 65536 / z;
-	pr->x = ((pt->x * inv_z) >> 8) + 160;
-	pr->y = ((pt->y * inv_z) >> 8) + 100;
+	pr->x = ((pt->x * inv_z) >> 8) + SCREEN_WIDTH/2;
+	pr->y = ((pt->y * inv_z) >> 8) + SCREEN_HEIGHT/2;
 }
 
 // -----------------------------------------------------
@@ -124,8 +124,8 @@ static inline void render_frame()
         rconvex_step(&rtris[s],  3,idx, trsf_points);
 
         int rz = 256;
-        int rx = c           - 160;
-        int ry = rtris[s].ys - 100;
+        int rx = c           - SCREEN_WIDTH/2;
+        int ry = rtris[s].ys - SCREEN_HEIGHT/2;
 
         if (s != bound_s) {
           surface_bind    (&tsrfs[s]);

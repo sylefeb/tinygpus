@@ -112,14 +112,15 @@ typedef struct {
 //       :  x_end
 
 // Table of 1/dx, avoids div in many cases
-unsigned short inv_dx[320];
+unsigned short inv_dx[SCREEN_WIDTH];
 
 // Pre-computes tables for rasterization
 static inline void raster_pre()
 {
   inv_dx[0] = 0;
-  for (int x=1;x<320;++x) {
-    inv_dx[x] = 65535/x;
+  inv_dx[1] = 65535;
+  for (int x=2;x<SCREEN_WIDTH;++x) {
+    inv_dx[x] = 65536/x;
   }
 }
 
@@ -135,9 +136,9 @@ static inline void redge_init(redge *l, int x0, int y0, int x1, int y1)
   l->x     = x0;       // current x position
 	l->y     = y0 << 16; // current y pos, 16.16
   int dx   = x1 - x0;  // x difference
-  if (dx < 320) {      // < 320,  avoid div and use table
+  if (dx < SCREEN_WIDTH) { // < SCREEN_WIDTH,  avoid div and use table
 	  l->dydx = (y1 - y0) * (int)(inv_dx[dx]);
-  } else {             // >= 320, use div
+  } else {             // >= SCREEN_WIDTH, use div
     l->dydx = ((y1 - y0) << 16) / dx;
   }
   // clip line if x is negative
@@ -241,10 +242,10 @@ static inline int rconvex_step(
 	t->ys = t->edge_top.y >> 16;
 	t->ye = t->edge_btm.y >> 16;
   // clamp y (assumes triangle is not out-of-screen)
-  if      (t->ye > 239) t->ye = 239;
-  else if (t->ye <   0) t->ye = 0;
-  if      (t->ys > 239) t->ys = 239;
-  else if (t->ys <   0) t->ys = 0;
+  if      (t->ye > SCREEN_HEIGHT-1) t->ye = SCREEN_HEIGHT-1;
+  else if (t->ye <               0) t->ye = 0;
+  if      (t->ys > SCREEN_HEIGHT-1) t->ys = SCREEN_HEIGHT-1;
+  else if (t->ys <               0) t->ys = 0;
   // increment
 	++t->x;
 	redge_step(&t->edge_top);

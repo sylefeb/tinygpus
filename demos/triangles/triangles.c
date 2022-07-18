@@ -73,8 +73,8 @@ static inline void transform(int *x, int *y, int *z)
 
 static inline void project(const p3d* pt, p3d *pr)
 {
-	pr->x = pt->x + 160;
-	pr->y = pt->y + 100;
+	pr->x = pt->x + SCREEN_WIDTH/2;
+	pr->y = pt->y + SCREEN_HEIGHT/2;
 }
 
 // -----------------------------------------------------
@@ -133,6 +133,7 @@ static inline void render_frame()
   // texturing surface transform
   trsf_surface tsrf;
   surface_transform(&srf, &tsrf, 700, transform, points);
+
   // NOTE: trsf.ded < 0 if back facing
   // bind the surface to the rasterizer
   surface_bind(&tsrf);
@@ -201,13 +202,13 @@ void main_0()
   oled_init();
   oled_fullscreen();
 
+  // prepare the rasterizer
+  raster_pre();
+
   // --------------------------
   // prepare the texturing surfaces
   // --------------------------
   surface_pre(&srf, *indices,*(indices+1),*(indices+2), points);
-
-  // prepare the rasterizer
-  raster_pre();
 
   // --------------------------
   // render loop
