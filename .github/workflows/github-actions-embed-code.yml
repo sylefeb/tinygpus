@@ -1,6 +1,15 @@
-uses: dineshsonachalam/markdown-autodocs@v1.0.4
-
+name: embed-code
 on:
   push:
     branches:
       - main
+
+jobs:
+  auto-update-readme:
+      runs-on: ubuntu-latest
+      steps:
+        - uses: actions/checkout@v2
+        - name: Markdown autodocs
+          uses: dineshsonachalam/markdown-autodocs@v1.0.4
+          with:
+            output_file_paths: '[./README.md]'
