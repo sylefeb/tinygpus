@@ -50,7 +50,7 @@ int view_dist = 600;
 
 static inline void project(const p3d* pt, p3d *pr)
 {
-	int z     = pt->z + view_dist; // view space
+	int z     = pt->z; // view space
 	int inv_z = 65536 / z;
 	pr->x = ((pt->x * inv_z) >> 8) + SCREEN_WIDTH/2;
 	pr->y = ((pt->y * inv_z) >> 8) + SCREEN_HEIGHT/2;
@@ -79,10 +79,13 @@ surface srfs[4];
 
 int angle;
 
-static inline void transform(int *x, int *y, int *z)
+static inline void transform(int *x, int *y, int *z,int w)
 {
   rot_y(angle   , x,y,z);
   rot_z(angle>>1, x,y,z);
+  if (w != 0) {
+    *z += view_dist;
+  }
 }
 
 // -----------------------------------------------------
@@ -96,7 +99,7 @@ static inline void render_frame()
 	// transform the points
  	for (int i = 0; i < 4; ++i) {
     p3d p = points[i];
-    transform(&p.x,&p.y,&p.z);
+    transform(&p.x,&p.y,&p.z,1);
 		project(&p, &trsf_points[i]);
  	}
   trsf_surface tsrfs[4];
@@ -104,7 +107,7 @@ static inline void render_frame()
   const int *idx =  indices;
   for (int s = 0 ; s < 4 ; ++ s) {
     // transform the textured surfaces for rendering at this frame
-    surface_transform(&srfs[s], &tsrfs[s], view_dist, transform, points);
+    surface_transform(&srfs[s], &tsrfs[s], transform, points);
     // prepare triangle rasterization
 	  rconvex_init(&rtris[s], 3,idx, trsf_points);
     idx += 3;

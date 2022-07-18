@@ -374,31 +374,29 @@ static inline void surface_pre(surface *s,int p0,int p1,int p2,const p3d *pts)
 
 // ____________________________________________________________________________
 // Transform callback
-typedef void (*f_transform)(int *x,int *y,int *z);
+typedef void (*f_transform)(int *x,int *y,int *z,int w);
 
 // ____________________________________________________________________________
 // Transform a surface with the current transform and view distance
 static inline void surface_transform(surface *s,trsf_surface *ts,
-                                     int view_dist,f_transform trsf,
-                                     const p3d *points)
+                                     f_transform trsf,const p3d *points)
 {
   ts->nx = s->nx; ts->ny = s->ny; ts->nz = s->nz;
   ts->ux = s->ux; ts->uy = s->uy; ts->uz = s->uz;
   ts->vx = s->vx; ts->vy = s->vy; ts->vz = s->vz;
   // transform plane vectors
-  trsf(&ts->nx,&ts->ny,&ts->nz);
-  trsf(&ts->ux,&ts->uy,&ts->uz);
-  trsf(&ts->vx,&ts->vy,&ts->vz);
+  trsf(&ts->nx,&ts->ny,&ts->nz,0);
+  trsf(&ts->ux,&ts->uy,&ts->uz,0);
+  trsf(&ts->vx,&ts->vy,&ts->vz,0);
   // uv translation
   p3d p0     = points[s->p0];
-  trsf(&p0.x,&p0.y,&p0.z);
-  p0.z      += view_dist;
-  ts->u_offs = dot3( p0.x,p0.y,p0.z, ts->ux,ts->uy,ts->uz ) >> 10;
-  ts->v_offs = dot3( p0.x,p0.y,p0.z, ts->vx,ts->vy,ts->vz ) >> 10;
+  trsf(&p0.x,&p0.y,&p0.z,1);
+  ts->u_offs = - dot3( p0.x,p0.y,p0.z, ts->ux,ts->uy,ts->uz ) >> 10;
+  ts->v_offs = - dot3( p0.x,p0.y,p0.z, ts->vx,ts->vy,ts->vz ) >> 10;
   // plane distance
   ts->ded    = dot3( p0.x,p0.y,p0.z, ts->nx,ts->ny,ts->nz ) >> 8;
   // NOTE: ded < 0 ==> backface surface
-  if (ts->ded > 0) {
+  if (ts->ded < 0) {
     ts->u_offs = - ts->u_offs;
     ts->v_offs = - ts->v_offs;
   }

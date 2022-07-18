@@ -35,7 +35,7 @@ unit DMC_1_gpu_standalone(
   input   uint1   screen_ready,
   output  uint1   screen_valid(0),
   output  uint16  screen_data,
-  // memory interface (SPIflash of QPSRAM)
+  // memory interface (SPIflash or QPSRAM)
   input   uint1   clock2x,
   output  uint1   ram_clk,
   output  uint1   ram_csn,

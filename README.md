@@ -15,18 +15,19 @@ Quick links:
   - [Discussion](#discussion)
 - [Credits](#credits)
 
-The tinyGPUs project started with the following question: *"What would have resembled graphics hardware dedicated to our beloved retro-games from the early 90's, such as Doom 1993 and Comanche 1992?"*. This led me to creating the `DMC-1` GPU, the first (and currently only!) tiny GPU in this repository.
+The tinyGPUs project started with the following question: *"What would have resembled graphics hardware dedicated to our beloved retro-games from the early 90's, such as Doom 1993 and Comanche 1992?"*. This led me to creating the `DMC-1` GPU, the first (and currently only!) tinyGPU in this repository.
 
-> **Note:** `DMC` stands for *Doom Meets Comanche*... also, it sounds cool (any resemblance to a car name is of course pure coincidence).
+> `DMC` stands for *Doom Meets Comanche*... also, it sounds cool (any resemblance to a car name is of course pure coincidence).
 
-However, the true objective is to *explore and explain* basic graphics hardware design. Don't expect to learn anything about modern GPUs, but rather expect to learn about fundamental graphics algorithms, their elegant simplicity, and how to turn these algorithms into hardware on FPGAs. And that is *surprisingly simple*.
+However, the true objective is to *explore and explain* basic graphics hardware design. Don't expect to learn anything about modern GPUs, but rather expect to learn about fundamental graphics algorithms, their elegant simplicity, and how to turn these algorithms into hardware on FPGAs.
 
-> **Note:** The `DMC-1` is powering my *Doom-chip "onice"* demo, about which I gave a talk at rC3 nowhere in December 2021. You can [watch it here](https://youtu.be/2ZAIIDXoBis) and [browse the slides here](https://www.antexel.com/doomchip_onice_rc3/).
+> The `DMC-1` is powering my *Doom-chip "onice"* demo, about which I gave a talk at rC3 nowhere in December 2021. You can [watch it here](https://youtu.be/2ZAIIDXoBis) and [browse the slides here](https://www.antexel.com/doomchip_onice_rc3/).
 
-> **Note:** There is a plan to do another tiny GPU, hence the *s* in tinyGPUs, exploring different design tradeoffs. But that will come later.
+There is a plan to do another tiny GPU, hence the *s* in tinyGPUs, exploring different design tradeoffs. But that will come later.
 
 The tinyGPUs are written in [Silice](https://github.com/sylefeb/Silice), with bits and pieces of Verilog.
 
+___
 ## Running the demos
 
 For building the DMC-1 demos Silice has to be installed and in the path, please refer to the [Silice repository](https://github.com/sylefeb/Silice).

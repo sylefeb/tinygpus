@@ -48,40 +48,51 @@ volatile int frame;
 
 #define N_PTS 3
 
+// Define three vertices
 const p3d points[N_PTS] = {
   {  64,   0,   0},
-  {   0, 64,   0},
+  {   0,  64,   0},
   { -64,   0,   0},
 };
-
-const int indices[3] = {
-  0,1,2,
-};
-
+// Define a single triangle from the vertices
+const int indices[3] = { 0,1,2 };
+// Will hold transformed points
 p3d     trsf_points[N_PTS];
-
+// Texturing surface definition
 surface srf;
 
 // -----------------------------------------------------
 
-int angle;
+const int view_dist = 800;
 
-static inline void transform(int *x, int *y, int *z)
+// Global parameters of transformation
+int tr_angle;       // rotation angle
+p3d tr_translation; // translation
+
+static inline void transform(int *x, int *y, int *z,int w)
 {
-  rot_z(angle>>1, x,y,z);
+  rot_z(tr_angle>>1, x,y,z);
+  if (w != 0) { // vertex, else direction
+    *x += tr_translation.x;
+    *y += tr_translation.y;
+    *z += tr_translation.z;
+    *z += view_dist;
+  }
 }
 
 static inline void project(const p3d* pt, p3d *pr)
 {
 	pr->x = pt->x + SCREEN_WIDTH/2;
 	pr->y = pt->y + SCREEN_HEIGHT/2;
+  pr->z = pt->z;
 }
 
 // -----------------------------------------------------
 
 typedef struct s_span {
-  int ys;
-  int ye;
+  unsigned char ys;
+  unsigned char ye;
+  unsigned char id; // triangle id
   struct s_span *next;
 } t_span;
 
@@ -96,14 +107,7 @@ int     span_alloc;
 static inline void render_frame()
 {
   // animation
-  angle = frame << 6;
-
-	// transform the points
- 	for (int i = 0; i < N_PTS; ++i) {
-    p3d p = points[i];
-    transform(&p.x,&p.y,&p.z);
-		project(&p, &trsf_points[i]);
- 	}
+  tr_angle = frame << 6;
 
   // reset spans
   span_alloc = 0;
@@ -111,34 +115,44 @@ static inline void render_frame()
     span_heads[i] = 0; // NOTE: could be cleared at startup and
   }                    //       then after each render
 
-	// rasterize triangle into spans
-  rconvex rtri;
-	rconvex_init(&rtri, 3,indices, trsf_points);
-  for (int c = rtri.x ; c <= rtri.last_x ; ++c) {
-    rconvex_step(&rtri, 3,indices, trsf_points);
-    // insert span
-    if (span_alloc < MAX_NUM_SPANS) {
-      int ispan = span_alloc ++;
-      t_span *span = span_pool + ispan;
-      span->ys = rtri.ys;
-      span->ye = rtri.ye;
-      span->next    = span_heads[c];
-      span_heads[c] = span;
+  // rasterize multiple instances of the triangle
+  #define N_TRIS 3
+  p3d poss[N_TRIS] = { { 0,0,0}, {-64,-32,-64},  { 64,32,64} };
+  // transformed texture surfaces (one per triangle)
+  trsf_surface tsrf[N_TRIS];
+  for (int t = 0; t < 3 ; ++t) {
+    // transform the points
+    tr_translation = poss[t];
+    for (int i = 0; i < N_PTS; ++i) {
+      p3d p = points[i];
+      transform(&p.x,&p.y,&p.z,1);
+      project(&p, &trsf_points[i]);
     }
+    // rasterize triangle into spans
+    rconvex rtri;
+    rconvex_init(&rtri, 3,indices, trsf_points);
+    for (int c = rtri.x ; c <= rtri.last_x ; ++c) {
+      rconvex_step(&rtri, 3,indices, trsf_points);
+      // insert span
+      if (span_alloc < MAX_NUM_SPANS) {
+        int ispan     = span_alloc ++;
+        t_span *span  = span_pool + ispan;
+        span->ys      = rtri.ys;
+        span->ye      = rtri.ye;
+        span->id      = t;
+        span->next    = span_heads[c];
+        span_heads[c] = span;
+      }
+    }
+    // prepare the surface
+    surface_transform(&srf, &tsrf[t], transform, points);
   }
 
 	// before drawing cols wait for previous frame
   wait_all_drawn();
 
-  // texturing surface transform
-  trsf_surface tsrf;
-  surface_transform(&srf, &tsrf, 700, transform, points);
-
-  // NOTE: trsf.ded < 0 if back facing
-  // bind the surface to the rasterizer
-  surface_bind(&tsrf);
-
   // render the spans
+  int last_bound_srf = -1;
   for (int c = 0; c < SCREEN_WIDTH ; ++c) {
     // go through list
     t_span *span = span_heads[c];
@@ -148,11 +162,19 @@ static inline void render_frame()
       int rx = c        - SCREEN_WIDTH/2;
       int ry = span->ys - SCREEN_HEIGHT/2;
 
-      surface_set_span(&tsrf, rx,ry,rz);
+      if (last_bound_srf != span->id) {
+        // bind the surface to the rasterizer
+        surface_bind(&tsrf[span->id]);
+        last_bound_srf = span->id;
+      }
+      // sets the surface span parameters
+      surface_set_span(&tsrf[span->id], rx,ry,rz);
 
+      // column drawing
       col_send(
-        COLDRAW_PLANE_B(tsrf.ded,tsrf.dr),
-        COLDRAW_COL(125/*texture id*/, span->ys,span->ye, 15 /*light*/) | PLANE
+        COLDRAW_PLANE_B(tsrf[span->id].ded,tsrf[span->id].dr),
+        COLDRAW_COL(125 + span->id /*texture id*/, span->ys,span->ye,
+                    15 /*light*/) | PLANE
       );
 
       // process pending column commands
@@ -208,6 +230,7 @@ void main_0()
   // --------------------------
   // prepare the texturing surfaces
   // --------------------------
+  // in this demo we use a single surface for all triangles
   surface_pre(&srf, *indices,*(indices+1),*(indices+2), points);
 
   // --------------------------
