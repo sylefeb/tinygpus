@@ -50,9 +50,9 @@ volatile int frame;
 
 // Define three vertices
 const p3d points[N_PTS] = {
-  {  64,   0,   0},
-  {   0,  64,   0},
-  { -64,   0,   0},
+  { 128,   0,   0},
+  {   0, 128,   0},
+  {-128,   0,   0},
 };
 // Define a single triangle from the vertices
 const int indices[3] = { 0,1,2 };
@@ -63,7 +63,7 @@ surface srf;
 
 // -----------------------------------------------------
 
-const int view_dist = 800;
+const int view_dist = 700;
 
 // Global parameters of transformation
 int tr_angle;       // rotation angle
@@ -82,9 +82,10 @@ static inline void transform(int *x, int *y, int *z,int w)
 
 static inline void project(const p3d* pt, p3d *pr)
 {
-	pr->x = pt->x + SCREEN_WIDTH/2;
-	pr->y = pt->y + SCREEN_HEIGHT/2;
-  pr->z = pt->z;
+	int z     = pt->z; // view space
+	int inv_z = 65536 / z;
+	pr->x = ((pt->x * inv_z) >> 8) + SCREEN_WIDTH/2;
+	pr->y = ((pt->y * inv_z) >> 8) + SCREEN_HEIGHT/2;
 }
 
 // -----------------------------------------------------
@@ -106,8 +107,6 @@ int     span_alloc;
 // draws all screen columns
 static inline void render_frame()
 {
-  // animation
-  tr_angle = frame << 6;
 
   // reset spans
   span_alloc = 0;
@@ -116,18 +115,23 @@ static inline void render_frame()
   }                    //       then after each render
 
   // rasterize multiple instances of the triangle
-  #define N_TRIS 3
-  p3d poss[N_TRIS] = { { 0,0,0}, {-64,-32,-64},  { 64,32,64} };
+  #define N_TRIS 256
   // transformed texture surfaces (one per triangle)
   trsf_surface tsrf[N_TRIS];
-  for (int t = 0; t < 3 ; ++t) {
+  for (int t = 0; t < N_TRIS ; ++t) {
+    // animation
+    tr_angle = (frame << 7) + (t << 9);
+    tr_translation.x = sine_table[ ((frame << 6) + (t << 8)) & 4095] >> 3;
+    tr_translation.y = sine_table[ ((frame << 5) + (t << 9)) & 4095] >> 4;
+    tr_translation.z = t<<6;
     // transform the points
-    tr_translation = poss[t];
     for (int i = 0; i < N_PTS; ++i) {
       p3d p = points[i];
       transform(&p.x,&p.y,&p.z,1);
       project(&p, &trsf_points[i]);
     }
+    // prepare the surface
+    surface_transform(&srf, &tsrf[t], transform, points);
     // rasterize triangle into spans
     rconvex rtri;
     rconvex_init(&rtri, 3,indices, trsf_points);
@@ -144,8 +148,6 @@ static inline void render_frame()
         span_heads[c] = span;
       }
     }
-    // prepare the surface
-    surface_transform(&srf, &tsrf[t], transform, points);
   }
 
 	// before drawing cols wait for previous frame
@@ -179,6 +181,7 @@ static inline void render_frame()
 
       // process pending column commands
       col_process();
+
       // next span
       span = span->next;
     }

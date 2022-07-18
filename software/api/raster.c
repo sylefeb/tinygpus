@@ -209,7 +209,9 @@ static inline void rconvex_raster_start(
     }
   }
   t->x      = min_x;
+  if (t->x < 0) { t->x = 0; } // redge_init properly deals with this too
   t->last_x = max_x;
+  if (t->last_x >= SCREEN_WIDTH) { t->last_x = SCREEN_WIDTH-1; }
   // Both lines start on the same left most vertex because the contour is
   // expected cw and the polygon front facing, there is no ambiguity that
   // the 'top' line is v->top,v->top+1 and 'btm' is v->btm,v->btm-1
@@ -378,7 +380,7 @@ typedef void (*f_transform)(int *x,int *y,int *z,int w);
 
 // ____________________________________________________________________________
 // Transform a surface with the current transform and view distance
-static inline void surface_transform(surface *s,trsf_surface *ts,
+static inline void surface_transform(const surface *s,trsf_surface *ts,
                                      f_transform trsf,const p3d *points)
 {
   ts->nx = s->nx; ts->ny = s->ny; ts->nz = s->nz;
@@ -389,12 +391,12 @@ static inline void surface_transform(surface *s,trsf_surface *ts,
   trsf(&ts->ux,&ts->uy,&ts->uz,0);
   trsf(&ts->vx,&ts->vy,&ts->vz,0);
   // uv translation
-  p3d p0     = points[s->p0];
+  p3d p0       = points[s->p0];
   trsf(&p0.x,&p0.y,&p0.z,1);
-  ts->u_offs = - dot3( p0.x,p0.y,p0.z, ts->ux,ts->uy,ts->uz ) >> 10;
-  ts->v_offs = - dot3( p0.x,p0.y,p0.z, ts->vx,ts->vy,ts->vz ) >> 10;
+  ts->u_offs   = - dot3( p0.x,p0.y,p0.z, ts->ux,ts->uy,ts->uz ) >> 10;
+  ts->v_offs   = - dot3( p0.x,p0.y,p0.z, ts->vx,ts->vy,ts->vz ) >> 10;
   // plane distance
-  ts->ded    = dot3( p0.x,p0.y,p0.z, ts->nx,ts->ny,ts->nz ) >> 8;
+  ts->ded      = dot3( p0.x,p0.y,p0.z, ts->nx,ts->ny,ts->nz ) >> 8;
   // NOTE: ded < 0 ==> backface surface
   if (ts->ded < 0) {
     ts->u_offs = - ts->u_offs;

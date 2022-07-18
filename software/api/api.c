@@ -59,14 +59,12 @@ static inline int userdata()
 
 static inline void col_process()
 {
-  //*LEDS = 1;
-  while ((userdata()&1) == 0) {  }
-  //*LEDS = 0;
+  while ((userdata()&1) == 0) { /*wait fifo not full*/ }
 }
 
 static inline void wait_all_drawn()
 {
-	while ((userdata()&4) == 0) { /*wait*/ }
+	while ((userdata()&4) == 0) { /*wait fifo empty*/ }
 }
 
 // -----------------------------------------------------

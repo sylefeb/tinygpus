@@ -6,6 +6,9 @@
 #include <cstring>
 #include <cstdio>
 
+#define SCREEN_WIDTH  320
+#define SCREEN_HEIGHT 240
+
 #include "tga.h"
 #include "../../../software/api/raster.c"
 
