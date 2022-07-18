@@ -3,6 +3,21 @@
 
 > **This is work in progress**. You're coming too soon, but feel free to peek around!
 
+Quick links:
+- [Running the demos](#running-the-demos)
+  - [In simulation](#in-simulation)
+  - [On the mch2022 badge](#on-the-mch2022-badge)
+  - [On the icebreaker](#on-the-icebreaker)
+- [The DMC-1 GPU design](#the-dmc-1-design)
+  - [Context](#context)
+  - [Perspective correct texturing](#perspective-correct-texturing)
+  - [Discussion](#discussion)
+- [Credits](#credits)
+
+```c:demos/triangles/triangles.c
+
+```
+
 The tinyGPUs project started with the following question: *"What would have resembled graphics hardware dedicated to our beloved retro-games from the early 90's, such as Doom 1993 and Comanche 1992?"*. This led me to creating the `DMC-1` GPU, the first (and currently only!) tiny GPU in this repository.
 
 > **Note:** `DMC` stands for *Doom Meets Comanche*... also, it sounds cool (any resemblance to a car name is of course pure coincidence).
@@ -19,6 +34,8 @@ The tinyGPUs are written in [Silice](https://github.com/sylefeb/Silice), with bi
 
 For building the DMC-1 demos Silice has to be installed and in the path, please refer to the [Silice repository](https://github.com/sylefeb/Silice).
 
+> **Note:** The build process automatically downloads files, including data files from external sources. See the download scripts [here](hardware/common/download_all.sh) and [here](demos/data/get_data.sh).
+
 There are three main demos: `terrain`, `tetrahedron` and `doomchip-onice`.
 All can be simulated, and currently run on the [mch2022 badge](https://www.bodge.team/docs/badges/mch2022/) and the [icebreaker](https://1bitsquared.com/products/icebreaker) with a SPI screen plugged in the PMOD 1A connector (details below).
 
@@ -28,10 +45,10 @@ All can be simulated, and currently run on the [mch2022 badge](https://www.bodge
 
 The demos are running both on the `icebreaker` board and the `MCH2022` badge.
 
-> **Note:** The build process automatically downloads files, see [here](hardware/common/download_all.sh) and [here](demos/data/get_data.sh).
-
 ___
 ### In simulation
+
+All demos can be run in simulation (verilator). Note that it takes a little bit of time before the rendering starts, as the full boot process (including loading code from SPIflash) is being simulating. During boot the screen remains black (on real hardware this delay is imperceptible).
 
 For the rotating tetrahedron demo:
 ```
@@ -183,8 +200,7 @@ Planar spans are only used for horizontal floors/ceilings in this demo, since wa
 
 A more general use can be seen in the [tetrahedron demo](demos/tetrahedron/tetrahedron.c). In this demo the triangles are rasterized into spans on the CPU ; this can be seen in the file [raster.c](software/api/raster.c) that contains detailed comments on that process too.
 
-___
-## Discussion
+### Discussion
 
 The `DMC-1` is unusual in that it renders the screen column by column, in order. This specific choice is motivated by the fact that we stream pixels to a SPI screen that features a framebuffer, so we do not have to spend precious memory on a framebuffer FPGA-side. Also, this allows the use of a one column depth buffer, a luxury enabling simpler drawing of scenes containing both the terrain, buildings and sprites.
 
