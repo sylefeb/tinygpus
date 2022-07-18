@@ -4,6 +4,8 @@ MCH2022_SILICE_URL=https://raw.githubusercontent.com/sylefeb/mch2022-silice/main
 OPT=-nc
 wget $OPT $SILICE_URL/projects/common/plls/icebrkr_25.v
 wget $OPT $SILICE_URL/projects/common/plls/icebrkr_50.v
+wget $OPT $SILICE_URL/projects/common/plls/icebrkr_60.v
+wget $OPT $SILICE_URL/projects/common/plls/icebrkr_66.v
 wget $OPT $SILICE_URL/projects/common/plls/icebrkr_100.v
 wget $OPT $SILICE_URL/projects/common/ice40_sb_io.v
 wget $OPT $SILICE_URL/projects/common/ice40_sb_io_ddr.v

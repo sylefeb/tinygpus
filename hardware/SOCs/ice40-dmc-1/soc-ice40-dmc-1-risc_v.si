@@ -28,7 +28,7 @@ $$else
   import('../../common/ice40_half_clock.v')
 $$end
 $$else
-  $$master_freq = 50
+  $$master_freq = 50 -- NOTE: overclocking at 60 MHz seems to be fine
   $$uart_in_clock_freq_mhz = master_freq//2
   $include('../../common/qpsram2x.si')
   import('../../common/ice40_half_clock.v')
