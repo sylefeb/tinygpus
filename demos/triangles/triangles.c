@@ -80,8 +80,9 @@ static inline void transform(int *x, int *y, int *z,int w)
 
 static inline void project(const p3d* pt, p3d *pr)
 {
-	int z     = pt->z; // view space
-	int inv_z = 65536 / z;
+	int z     = pt->z;     // view space
+	int inv_z = 65536 / z; // NOTE: could precomp in this demo, each triangle
+                         //       is at a fixed depth
 	pr->x = ((pt->x * inv_z) >> 8) + SCREEN_WIDTH/2;
 	pr->y = ((pt->y * inv_z) >> 8) + SCREEN_HEIGHT/2;
 }
@@ -102,6 +103,15 @@ int     span_alloc;
 
 // -----------------------------------------------------
 
+// rasterize multiple instances of the triangle
+#define N_TRIS 48
+// transformed and projected points
+p3d     prj_points[N_PTS];
+// transformed texture surfaces (one per triangle)
+trsf_surface tsrf[N_TRIS];
+
+// -----------------------------------------------------
+
 // draws all screen columns
 static inline void render_frame()
 {
@@ -109,12 +119,6 @@ static inline void render_frame()
   // reset spans
   span_alloc = 0;
 
-  // rasterize multiple instances of the triangle
-  #define N_TRIS 48
-  // transformed and projected points
-  p3d     prj_points[N_PTS];
-  // transformed texture surfaces (one per triangle)
-  trsf_surface tsrf[N_TRIS];
   for (int t = 0; t < N_TRIS ; ++t) {
     // animation
     tr_angle         = (frame << 7) + (t << 9);
