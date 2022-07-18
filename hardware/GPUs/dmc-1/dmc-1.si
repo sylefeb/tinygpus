@@ -262,7 +262,6 @@ $$end
   int32  a(0);  int32  b(0);  int32  c(0);
 
   // ---- orchestration
-  // NOTE: terrain needs 2 cycles after sample is received TODO: why??
 $$if MCH2022 then
   $$delay_bit = 12
 $$else
@@ -284,14 +283,14 @@ $$end
 $$if MCH2022 then
   // fetch is 10 cycles
   $$ smplr_seq_init       = '{8b0,plane|wall,1b0,1b0,terrain}'
-  //                              ^^^^ plane and wall go as fast as SPI texlkup
+  //                              ^^^^ plane and wall go as fast as texlkup
   //                                                 ^^^ terrain needs +3 cyles
   $$ smplr_seq_init_start = smplr_seq_init
 $$else
 $$if spi4x then
   // fetch is 4 cycles
   $$ smplr_seq_init       = '{2b0,plane|wall,1b0,1b0,terrain,1b0}'
-  //                              ^^^^ plane and wall go as fast as SPI texlkup
+  //                              ^^^^ plane and wall go as fast as texlkup
   //                                                 ^^^ terrain needs +3 cyles
   $$ smplr_seq_init_start = '{3b0,plane|wall,1b0,1b0,terrain}'
   //                          ^^^
@@ -299,7 +298,7 @@ $$if spi4x then
 $$else
   // fetch is 7 cycles
   $$ smplr_seq_init       = '{5b0,plane|wall,1b0,1b0,terrain}'
-  //                              ^^^^ plane and wall go as fast as SPI texlkup
+  //                              ^^^^ plane and wall go as fast as texlkup
   //                                                 ^^^ terrain needs +3 cyles
   $$ smplr_seq_init_start = smplr_seq_init
 $$end
@@ -349,12 +348,12 @@ $$end
         b     = __signed(dot_u); //_ *dot_u
       }
       case 2: {
-        tr_u  = (result >>> 20) + __signed(u_offset);
+        tr_u  = ((result >>> 14) + __signed(u_offset)) >> 6;
         // a     = __signed(ray_t);  //_  t
         b     = __signed(dot_v); //_ *dot_v
       }
       case 3: {
-        tr_v  = (result >>> 20) + __signed(v_offset);
+        tr_v  = ((result >>> 14) + __signed(v_offset)) >> 6;
       }
       // ---- plane is done
 
@@ -365,13 +364,13 @@ $$end
         c     = {24{1b0}};
       }
       case 17: {
-        tr_u  = (__signed(result >>> 12) + __signed(u_offset));
+        tr_u  = (__signed(result >>> 6) + __signed(u_offset)) >> 6;
         a     = terrain_dist;
         b     = __signed(sinray);
         c     = {24{1b0}};
       }
       case 18: {
-        tr_v  = (__signed(result >>> 12) + __signed(v_offset));
+        tr_v  = (__signed(result >>> 6) + __signed(v_offset)) >> 6;
       }
       default: {
         // terrain column height computation, only used if terrain & tcol_rdy

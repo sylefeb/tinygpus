@@ -1172,7 +1172,7 @@ void main_0()
       PARAMETER
     );
     col_send(
-      PARAMETER_UV_OFFSET( view_y, view_x ),
+      PARAMETER_UV_OFFSET( view_y<<6, view_x<<6 ),
       PARAMETER
     );
 

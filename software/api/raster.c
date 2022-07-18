@@ -390,15 +390,16 @@ static inline void surface_transform(const surface *s,trsf_surface *ts,
   trsf(&ts->nx,&ts->ny,&ts->nz,0);
   trsf(&ts->ux,&ts->uy,&ts->uz,0);
   trsf(&ts->vx,&ts->vy,&ts->vz,0);
-  // uv translation
+  // transform p0 (reference point for the surface)
   p3d p0       = points[s->p0];
   trsf(&p0.x,&p0.y,&p0.z,1);
-  ts->u_offs   = - dot3( p0.x,p0.y,p0.z, ts->ux,ts->uy,ts->uz ) >> 10;
-  ts->v_offs   = - dot3( p0.x,p0.y,p0.z, ts->vx,ts->vy,ts->vz ) >> 10;
+  // uv translation: translate so that p0 uv coordinates remain (0,0)
+  ts->u_offs   = dot3( p0.x,p0.y,p0.z, ts->ux,ts->uy,ts->uz ) >> 4;
+  ts->v_offs   = dot3( p0.x,p0.y,p0.z, ts->vx,ts->vy,ts->vz ) >> 4;
   // plane distance
   ts->ded      = dot3( p0.x,p0.y,p0.z, ts->nx,ts->ny,ts->nz ) >> 8;
   // NOTE: ded < 0 ==> backface surface
-  if (ts->ded < 0) {
+  if (ts->ded > 0) {
     ts->u_offs = - ts->u_offs;
     ts->v_offs = - ts->v_offs;
   }
