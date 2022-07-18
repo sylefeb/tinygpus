@@ -394,8 +394,8 @@ static inline void surface_transform(const surface *s,trsf_surface *ts,
   p3d p0       = points[s->p0];
   trsf(&p0.x,&p0.y,&p0.z,1);
   // uv translation: translate so that p0 uv coordinates remain (0,0)
-  ts->u_offs   = dot3( p0.x,p0.y,p0.z, ts->ux,ts->uy,ts->uz ) >> 4;
-  ts->v_offs   = dot3( p0.x,p0.y,p0.z, ts->vx,ts->vy,ts->vz ) >> 4;
+  ts->u_offs   = dot3( p0.x,p0.y,p0.z, ts->ux,ts->uy,ts->uz );
+  ts->v_offs   = dot3( p0.x,p0.y,p0.z, ts->vx,ts->vy,ts->vz );
   // plane distance
   ts->ded      = dot3( p0.x,p0.y,p0.z, ts->nx,ts->ny,ts->nz ) >> 8;
   // NOTE: ded < 0 ==> backface surface
@@ -411,8 +411,8 @@ static inline void surface_bind(trsf_surface *s)
 {
 #ifndef EMUL
   col_send(
-    PARAMETER_UV_OFFSET(s->u_offs,s->v_offs),
-    PARAMETER
+    PARAMETER_UV_OFFSET(s->v_offs),
+    PARAMETER_UV_OFFSET_EX(s->u_offs) | PARAMETER
   );
 #endif
 }
@@ -428,7 +428,7 @@ static inline void surface_set_span(trsf_surface *s,int rx,int ry,int rz)
 
   col_send(
     PARAMETER_PLANE_A(s->ny,s->uy,s->vy),
-    PARAMETER_PLANE_DTA(du,dv) | PARAMETER
+    PARAMETER_PLANE_A_EX(du,dv) | PARAMETER
   );
 #endif
 }

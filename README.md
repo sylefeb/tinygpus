@@ -4,16 +4,17 @@
 > **This is work in progress**. You're coming too soon, but feel free to peek around!
 
 Quick links:
-- [Running the demos](#running-the-demos)
-  - [In simulation](#in-simulation)
-  - [On the mch2022 badge](#on-the-mch2022-badge)
-  - [On the icebreaker](#on-the-icebreaker)
-- [The DMC-1 GPU design](#the-dmc-1-design)
-  - [Context](#context)
-  - [On perspective correct texturing](#on-perspective-correct-texturing)
-  - [Design walkthrough](#design-walkthrough)
-  - [Discussion](#discussion)
-- [Credits](#credits)
+- [TinyGPUs](#tinygpus)
+  - [Running the demos](#running-the-demos)
+    - [In simulation](#in-simulation)
+    - [On the MCH2022 badge](#on-the-mch2022-badge)
+    - [On the icebreaker](#on-the-icebreaker)
+  - [The DMC-1 design](#the-dmc-1-design)
+    - [Context](#context)
+    - [On perspective correct texturing](#on-perspective-correct-texturing)
+    - [Design walkthrough](#design-walkthrough)
+    - [Discussion](#discussion)
+  - [Credits](#credits)
 
 The tinyGPUs project started with the following question: *"What would have resembled graphics hardware dedicated to our beloved retro-games from the early 90's, such as Doom 1993 and Comanche 1992?"*. This led me to creating the `DMC-1` GPU, the first (and currently only!) tinyGPU in this repository.
 
@@ -186,7 +187,7 @@ And that's about it for the main trick enabling perspective correct *planar* tex
     int dv = dot3( cx,0,rz, -sinview,0,cosview ) >> 14;
     col_send(
       PARAMETER_PLANE_A(256,0,0), // ny,uy,vy
-      PARAMETER_PLANE_DTA(du,dv) | PARAMETER
+      PARAMETER_PLANE_A_EX(du,dv) | PARAMETER
     );
     // ...
     // drawing a floor span

@@ -860,7 +860,7 @@ static inline void draw_columns()
     int dv = dot3( cx,0,rz, -sinview,0,cosview ) >> 14;
     col_send(
       PARAMETER_PLANE_A(256,0,0), // ny,uy,vy
-      PARAMETER_PLANE_DTA(du,dv) | PARAMETER
+      PARAMETER_PLANE_A_EX(du,dv) | PARAMETER
     );
 
     // init top/btm
@@ -1172,8 +1172,8 @@ void main_0()
       PARAMETER
     );
     col_send(
-      PARAMETER_UV_OFFSET( view_y<<6, view_x<<6 ),
-      PARAMETER
+      PARAMETER_UV_OFFSET( view_x<<10 ),
+      PARAMETER_UV_OFFSET_EX( view_y<<10 ) | PARAMETER
     );
 
     // draw screen columns

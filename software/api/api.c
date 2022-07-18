@@ -29,10 +29,11 @@
 // parameter: ray cs (terrain)
 #define PARAMETER_RAY_CS(cs,ss)      (0<<30) | (( cs) & 16383) | ((   ss & 16383 )<<14)
 // parameter: uv offset
-#define PARAMETER_UV_OFFSET(uo,vo)   (1<<30) | ((uo) & 16383) | (((vo) & 16383)<<14)
+#define PARAMETER_UV_OFFSET(vo)      (1<<30) | ((vo) & 16777215)
+#define PARAMETER_UV_OFFSET_EX(uo) (((uo) & 16777215)<<1)
 // parameter: plane
 #define PARAMETER_PLANE_A(ny,uy,vy)  (2<<30) | ((ny) & 1023)  | (((uy) & 1023)<<10) | (((vy) & 1023)<<20)
-#define PARAMETER_PLANE_DTA(du,dv)   (((du) & 16383)<<1) | (((dv) & 16383)<<15)
+#define PARAMETER_PLANE_A_EX(du,dv)  (((du) & 16383)<<1) | (((dv) & 16383)<<15)
 // parameter: terrain view height
 #define PARAMETER_VIEW_Z(view_z)     (3<<30) | (view_z&65535)
 

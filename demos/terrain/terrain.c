@@ -166,8 +166,8 @@ void main_0()
       PARAMETER
     );
     col_send(
-      PARAMETER_UV_OFFSET(view_x,view_y),
-      PARAMETER
+      PARAMETER_UV_OFFSET( view_y<<10 ),
+      PARAMETER_UV_OFFSET_EX( view_x<<10 ) | PARAMETER
     );
 
     // draw screen columns

@@ -2,7 +2,7 @@
 
 Draw commands are made through a basic API; each call requires sending two 32 bits words for a total of 64 bits per command.
 
-The GPU allows to draw different types of spans: wall, perspective, terrain and a fourth type that is not a span but a call to specify rendering parameters.
+The GPU allows to draw different types of spans: wall, plane, terrain and a fourth type that is not a span but a call to specify rendering parameters.
 
 The CPU side API is [here](../../../software/api/api.c).
 
@@ -19,43 +19,63 @@ For instance, to draw a wall from `yf` to `yc` (vertical screen coordinates, `yf
 
 Two 32 bits words: Tex1, Tex0
 
-Draw command types: wall (00), perspective (01), terrain (10), parameter (11)
+Draw command types: wall (00), plane (01), terrain (10), parameter (11)
 
-**Tex1** command tag, texture id, column start/end
+___
+### **Tex1** tag, texture id, column start/end
 
-- `tag != 2b11` (wall, perspective, terrain)
+___
+__wall, plane, terrain__ (`tag != 2b11`)
 
 |  31-30 (2) |  29-26 (4) |  25-18 (8) |  17-10 (8) | 0-9 (10)   |
 |------------|------------|------------|------------|------------|
 | tag        |  light     |  col end   | col start  | texture id |
 
-> col_end > col_start or command is ignored, unless end of col
+> col_end >= col_start or command is ignored
 
-- `tag == 2b11` (parameter)
+___
+__parameter__ (`tag == 2b11`)
 
-|  31-30 (2) | 29(1)  | 28-15 (14) | 14-1 (14) | 0 (1)      |
-|------------|--------|------------|-----------|------------|
-| 2b11       | unused |    dv      |  du       | end of col |
+|  31-30 (2) | 29-1 (29)                     |  0 (1)      |
+|------------|-------------------------------|-------------|
+| 2b11       | usage based on `tag2` in Tex0 |  end of col |
 
-> If `tag == 2b11` and `end of column == 1`, the command is not
-passed further and thus there is no confusion with the perspective A data
-case below)
+- __planeA data__ (`tag == 2b11` *and* `tag2 == 10`)
 
-**Tex0** depending on `tag`
+|  31-30 (2) | 29 (1)  | 28-15 (14) | 14-1 (14) | 0 (1)      |
+|------------|---------|------------|-----------|------------|
+| 2b11       | unused  |    dv      |  du       | end of col |
 
-- Wall (`tag == 2b00`)
+- __uv offset__ (`tag == 2b11` *and* `tag2 == 01`)
+
+|  31-30 (2) | 29-25 (5)  | 24-1 (24) | 0 (1)      |
+|------------|------------|-----------|------------|
+| 2b11       | unused     | u_offset  | end of col |
+
+__end of column__ (`tag == 2b11` and `end of column == 1`)
+
+Note: the command is not passed further and thus there is no confusion with
+the other cases.
+
+___
+### **Tex0** depending on `tag`
+
+___
+__Wall__ (`tag == 2b00`)
 
 | 31-24  (8) | 23-16 (8) | 15-0 (16)  |
 |------------|-----------|------------|
 | u_init     | v_init    | wall y     |
 
-- perspective (`tag == 2b01`)
+___
+__Plane__ (`tag == 2b01`)
 
 | 31-16 (16)  | 15-0 (16)  |
 |-------------|------------|
 | dot_ray     |  ded       |
 
-- Terrain (`tag == 2b10`)
+___
+__Terrain__ (`tag == 2b10`)
 
 | 31  (1) | 30-16 (8) | 15-0 (16)  |
 |---------|-----------|------------|
@@ -63,32 +83,32 @@ case below)
 
 (needs to have columns sin/cos set before, see below)
 
-- parameter (`tag == 2b11`) (30 bits max)
+___
+__Parameter__ (`tag == 2b11`) (30 bits max)
 
 | 31-30 (2)  | 29-0 (30)  |
 |------------|------------|
 | `tag2`     | `data`     |
 
- `tag2==00`, `data` is column sine/cosine data
+- `tag2==00`, `data` is column sine/cosine data
 
-| 28-14 (14) | 13-0 (14)  |
-|------------|------------|
-| sin        | cos        |
+| 29 (1) | 28-14 (14) | 13-0 (14)  |
+|--------|------------|------------|
+| unused | sin        | cos        |
 
- `tag2==01`, `data` is UV offset data
+- `tag2==01`, `data` is UV offset data (also uses `u_offset` from Tex1)
 
-| 28-14 (14) | 13-0 (14)  |
-|------------|------------|
-| v          | u          |
+| 29-24 (6) | 23-0 (24)  |
+|-----------|------------|
+| unused    | v_offset   |
 
- `tag2==10`, `data` is perspective A data
-(also uses `dv`,`du` from Tex1)
+- `tag2==10`, `data` is plane A data (also uses `dv`,`du` from Tex1)
 
 | 29-20 (10) | 19-10 (10)  | 9-0 (10)  |
 |------------|------------|------------|
 |  vy        |  uy        |  ny        |
 
- `tag2==11`, terrain view height
+- `tag2==11`, terrain view height
 
 | 31-16 (16) | 15-0 (16)  |
 |------------|------------|

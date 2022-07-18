@@ -231,8 +231,8 @@ $$end
   int10  uy_inc(0);
   int10  vy_inc(0);
   int32  ray_t(0);
-  int14  u_offset(0);
-  int14  v_offset(0);
+  int24  u_offset(0);
+  int24  v_offset(0);
 
   // ---- terrain
   int16  view_z(0);         // view elevation
@@ -348,12 +348,12 @@ $$end
         b     = __signed(dot_u); //_ *dot_u
       }
       case 2: {
-        tr_u  = ((result >>> 14) + __signed(u_offset)) >> 6;
+        tr_u  = ((result >>> 10) + __signed(u_offset));
         // a     = __signed(ray_t);  //_  t
         b     = __signed(dot_v); //_ *dot_v
       }
       case 3: {
-        tr_v  = ((result >>> 14) + __signed(v_offset)) >> 6;
+        tr_v  = ((result >>> 10) + __signed(v_offset));
       }
       // ---- plane is done
 
@@ -364,13 +364,13 @@ $$end
         c     = {24{1b0}};
       }
       case 17: {
-        tr_u  = (__signed(result >>> 6) + __signed(u_offset)) >> 6;
+        tr_u  = (__signed(result >>> 2) + __signed(u_offset));
         a     = terrain_dist;
         b     = __signed(sinray);
         c     = {24{1b0}};
       }
       case 18: {
-        tr_v  = (__signed(result >>> 6) + __signed(v_offset)) >> 6;
+        tr_v  = (__signed(result >>> 2) + __signed(v_offset));
       }
       default: {
         // terrain column height computation, only used if terrain & tcol_rdy
@@ -402,12 +402,12 @@ $$end
     sampler_io.do_bind  = 0;
     sampler_io.do_fetch = 0; // pulsed high when needed in always block
     // TODO: simplify below if applicable ===============================
-    sampler_io.u        =  (plane   ? tr_u[0,8]                   : 11b0)
+    sampler_io.u        =  (plane   ? tr_u[10,8]                  : 11b0)
                         |  (wall    ? {3b0,wc_u_8}                : 11b0)
-                        |  (terrain ? {          1b0,tr_u[2,10]}  : 11b0);
-    sampler_io.v        =  (plane   ? {1b0,tr_v[0,8]}             : 11b0)
+                        |  (terrain ? {          1b0,tr_u[12,10]} : 11b0);
+    sampler_io.v        =  (plane   ? {1b0,tr_v[10,8]}            : 11b0)
                         |  (wall    ? {3b0,wc_v_8}                : 11b0)
-                        |  (terrain ? {~current_done,tr_v[2,10]}  : 11b0);
+                        |  (terrain ? {~current_done,tr_v[12,10]} : 11b0);
 //                                     ^^^^^^^^^^^^^ selects height or color
 //                                     hardcoded for a 1024 texture size ...
 
@@ -429,8 +429,8 @@ $$end
       cosray             = ray_cs ? __signed(in_command[32,14]) : cosray;
       sinray             = ray_cs ? __signed(in_command[46,14]) : sinray;
       // u,v offsets (plane)
-      u_offset           = uv_offs? __signed(in_command[32,14]) : u_offset;
-      v_offset           = uv_offs? __signed(in_command[46,14]) : v_offset;
+      u_offset           = uv_offs? __signed(in_command[ 1,24]) : u_offset;
+      v_offset           = uv_offs? __signed(in_command[32,24]) : v_offset;
       // view_z
       view_z             = set_vwz? __signed(in_command[32,16]) : view_z;
       // plane span data
