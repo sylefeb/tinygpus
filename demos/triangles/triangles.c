@@ -15,6 +15,8 @@
 #include "api.c"
 #include "raster.c"
 
+#define DEBUG
+
 // -----------------------------------------------------
 // Rotations
 // -----------------------------------------------------
@@ -115,9 +117,14 @@ trsf_surface tsrf[N_TRIS];
 // draws all screen columns
 static inline void render_frame()
 {
+  *LEDS = 0;
 
   // reset spans
   span_alloc = 0;
+
+#ifdef DEBUG
+  unsigned int tm_1 = time();
+#endif
 
   for (int t = 0; t < N_TRIS ; ++t) {
     // animation
@@ -151,8 +158,18 @@ static inline void render_frame()
     }
   }
 
+#ifdef DEBUG
+  unsigned int tm_2 = time();
+#endif
+
 	// before drawing cols wait for previous frame
   wait_all_drawn();
+
+#ifdef DEBUG
+  unsigned int tm_3 = time();
+  unsigned int tm_colprocess = 0;
+  unsigned int tm_srfspan = 0;
+#endif
 
   // render the spans
   int last_bound_srf = -1;
@@ -170,7 +187,13 @@ static inline void render_frame()
         last_bound_srf = span->id;
       }
       // sets the surface span parameters
+#ifdef DEBUG
+      unsigned int tm_ss = time();
+#endif
       surface_set_span(&tsrf[span->id], rx,ry,rz);
+#ifdef DEBUG
+      tm_srfspan += time() - tm_ss;
+#endif
       // column drawing
       col_send(
         COLDRAW_PLANE_B(tsrf[span->id].ded,tsrf[span->id].dr),
@@ -178,7 +201,13 @@ static inline void render_frame()
                     15 /*light*/) | PLANE
       );
       // process pending column commands
+#ifdef DEBUG
+      unsigned int tm_cp = time();
+#endif
       col_process();
+#ifdef DEBUG
+      tm_colprocess += time() - tm_cp;
+#endif
       // next span
       span = span->next;
     }
@@ -195,9 +224,22 @@ static inline void render_frame()
     span_heads[c] = 0;
 
     // process pending column commands
+#ifdef DEBUG
+      unsigned int tm_cp = time();
+#endif
     col_process();
+#ifdef DEBUG
+      tm_colprocess += time() - tm_cp;
+#endif
 
   }
+
+#ifdef DEBUG
+  unsigned int tm_4 = time();
+  printf("raster %d, wait %d, spans %d, colprocess %d, srfspan %d, tot %d\n",
+     tm_2-tm_1, tm_3-tm_2, tm_4-tm_3, tm_colprocess, tm_srfspan, tm_4-tm_1);
+  printf("num spans %d\n",span_alloc);
+#endif
 
 }
 

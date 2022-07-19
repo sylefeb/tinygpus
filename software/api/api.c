@@ -72,14 +72,14 @@ static inline void wait_all_drawn()
 // Basic CPU functions
 // -----------------------------------------------------
 
-static inline int time()
+static inline unsigned int time()
 {
    int cycles;
    asm volatile ("rdcycle %0" : "=r"(cycles));
    return cycles;
 }
 
-static inline int core_id()
+static inline unsigned int core_id()
 {
    unsigned int v;
    asm volatile ("rdcycle %0" : "=r"(v));
@@ -91,21 +91,21 @@ static inline void pause(int cycles)
 #ifdef SIMULATION
   cycles = 8; // override all delays
 #endif
-  long tm_start = time();
+  unsigned int tm_start = time();
   while (time() - tm_start < cycles) { }
 }
 
-static inline int btn_left()
+static inline unsigned int btn_left()
 {
   return userdata() & (1<<5);
 }
 
-static inline int btn_fwrd()
+static inline unsigned int btn_fwrd()
 {
   return userdata() & (1<<6);
 }
 
-static inline int btn_right()
+static inline unsigned int btn_right()
 {
   return userdata() & (1<<7);
 }

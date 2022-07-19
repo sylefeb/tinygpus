@@ -109,6 +109,12 @@ unit texture_sampler(
   uint11 v(0);          // v fetch coordinate
   uint24 fetch_addr(0); // fetch address (from u,v)
 
+$$if SIMULATION then
+  int32 cycle(0);
+  int32 cycle_bnd_start(0);
+  int32 cycles_in_bnd(0);
+$$end
+
   always {
     uint1  starting   <:: (~binding[0,1]) & smplr.do_bind;
     uint11 modu       <:: ((1<<tex_wp2)-1);
@@ -118,6 +124,9 @@ unit texture_sampler(
     // update binding (takes multiple cycles, continues while binding[0,1] == 1)
     binding       = starting ? 6b011111
                              : ((~txm.busy & ~skip_one) ? binding>>1 : binding);
+$$if SIMULATION then
+    cycle_bnd_start = starting ? cycle : cycle_bnd_start;
+$$end
     smplr.ready   = ~binding[0,1];  // ready to sample when not binding
     // next fetch address (not u,v are from previous cycle, see below)
     fetch_next    = smplr.do_fetch; // fetch on next cycle
@@ -150,6 +159,12 @@ unit texture_sampler(
       }
       tex_wp2        = txm.data[0,4]; // written last, so no condition
       tex_hp2        = txm.data[4,4];
+$$if SIMULATION then
+      if (~binding[1,1]) {
+        cycles_in_bnd = cycles_in_bnd + __signed(1) + (cycle - cycle_bnd_start);
+        //__display("cycles in binding: %d\n",cycles_in_bnd);
+      }
+$$end
     } else {                                      // ---- fetching
       skip_one      = 0;
       // fetch next sample
@@ -158,6 +173,9 @@ unit texture_sampler(
                      : fetch_addr;
       txm.in_ready   = fetch_next;
     }
+$$if SIMULATION then
+    cycle = cycle + 1;
+$$end
   }
 }
 
