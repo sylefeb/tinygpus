@@ -197,7 +197,7 @@ static inline void render_frame()
       // column drawing
       col_send(
         COLDRAW_PLANE_B(tsrf[span->id].ded,tsrf[span->id].dr),
-        COLDRAW_COL(82 + span->id /*texture id*/, span->ys,span->ye,
+        COLDRAW_COL(100 + span->id /*texture id*/, span->ys,span->ye,
                     15 /*light*/) | PLANE
       );
       // process pending column commands
@@ -236,7 +236,7 @@ static inline void render_frame()
 
 #ifdef DEBUG
   unsigned int tm_4 = time();
-  printf("raster %d, wait %d, spans %d, colprocess %d, srfspan %d, tot %d\n",
+  printf("(cycles) raster %d, wait %d, spans %d, colprocess %d, srfspan %d, tot %d\n",
      tm_2-tm_1, tm_3-tm_2, tm_4-tm_3, tm_colprocess, tm_srfspan, tm_4-tm_1);
   printf("num spans %d\n",span_alloc);
 #endif
