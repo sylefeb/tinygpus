@@ -17,23 +17,32 @@ $$spi4x = nil
 
 $$if not MCH2022 then
 $$if spi4x then
+  // ice40 spi4x (experimental)
   $$master_freq = 100
   $$uart_in_clock_freq_mhz = master_freq//4
   $include('../../common/spiflash4x.si')
   import('../../common/ice40_half_quarter_clock.v')
 $$else
+  // ice40 spi2x
   $$master_freq = 50
   $$uart_in_clock_freq_mhz = master_freq//2
   $include('../../common/spiflash2x.si')
   import('../../common/ice40_half_clock.v')
 $$end
 $$else
+  // MCH2022 badge
   // overclocking at 60 MHz seems to be fine and we need that to drive SPI
   // com at 30 MHz with the badge ESP32 (to load data from file)
   $$master_freq = 60
   $$uart_in_clock_freq_mhz = master_freq//2
   $include('../../common/qpsram2x.si')
   import('../../common/ice40_half_clock.v')
+  // include ESP32 SPI file read interface
+  import('../../common/spi_file.v')
+  append('../common/ext/spi_dev_core.v')
+  append('../common/ext/spi_dev_proto.v')
+  append('../common/ext/spi_dev_fread.v')
+  append('../common/ext/ram_sdp.v')
 $$end
 
 $include('../../common/uart.si')
@@ -48,12 +57,15 @@ $$SPRAM_128K         = 1
 $$if ICE40 then
 import('../../common/icebrkr_$master_freq$.v')
 import('../../common/ice40_spram.v')
+$$else
+$$error('This SOC is meant for an ice40 board')
 $$end
 
 $$if SIMULATION then
 $include('../../common/simulation_spram.si')
 $$end
 
+// include the GPU and peripherals
 $include('../../GPUs/dmc-1/dmc-1.si')
 $include('../../GPUs/dmc-1/command_queue.si')
 $$if MCH2022 then
@@ -62,15 +74,23 @@ $$else
 $include('../../GPUs/dmc-1/spi_screen.si')
 $$end
 
-// configuration for the ice-v-dual
-$$ICEV_MULDIV        = 1
-$$ICEV_FAST_SHIFT    = 1
-$$ICEV_USERDATA      = 1
-$$ICEV_ALU_LATCH     = 1
-$$Boot               = (1<<17)>>2
-$$addrW              = 17
+// pre-compilation script, embeds code within a string for BRAM
+$$dofile('../../../software/compile/ice40/pre_include_asm.lua')
+$$code_size_bytes = init_data_bytes
+
+// configuration for the ice-v-dual processor
+$$ICEV_MULDIV        = 1 -- hardware mul div
+$$ICEV_FAST_SHIFT    = 1 -- one cycle shifter
+$$ICEV_USERDATA      = 1 -- userdata register
+$$ICEV_ALU_LATCH     = 1 -- latch ALU (better fmax on ice40)
+$$Boot               = (1<<17)>>2 -- boot address
+$$addrW              = 17         -- address bus width
 //_                    ^^ 2^17 (128K) + 1 bit for BRAM + 1 bit for mapping
 //_                    divided by 4 as we address 32 bits words
+// includes the CPU
+$include('../../common/ice-v-dual.si')
+
+// define a group for interfacing with the memory
 group bram_port_io {
   uint$addrW$ addr(0),
   uint4       wenable(0),
@@ -78,15 +98,13 @@ group bram_port_io {
   uint32      wdata(0),
 }
 
-// pre-compilation script, embeds code within string for BRAM and outputs sdcard image
-$$sdcard_image_pad_size = 0
-$$dofile('../../../software/compile/ice40/pre_include_asm.lua')
-$$code_size_bytes = init_data_bytes
+// include the memory unit, which contains both a BRAM (boot) and SPRAM
+// see comments in this file for the memory space layout
+$include('bram_spram_32bits.si')
 
-$include('../../common/ice-v-dual.si')
+// stable reset
 $$clean_reset_width = 4
 $include('../../common/clean_reset.si')
-$include('bram_spram_32bits.si')
 
 // --------------------------------------------------
 // PLL for simulation
@@ -158,10 +176,18 @@ $$if LCD then
   input  uint1 lcd_mode,
   input  uint1 lcd_fmark,
 $$end
+$$if ESPSPI then
+  input  uint1 espspi_mosi,
+  output uint1 espspi_miso,
+  input  uint1 espspi_clk,
+  input  uint1 espspi_cs_n,
+  output uint1 espirq_n,
+$$end
 )
 $$if ICE40 then
 <@clock1x,!rst1x> {
 
+// clocks (setup PLLs)
 $$if spi4x then
   uint1 clock4x = uninitialized;
   pll pllgen(
@@ -170,6 +196,7 @@ $$if spi4x then
   );
   uint1 clock1x = uninitialized;
   uint1 clock2x = uninitialized;
+  // clock divider /2, /4
   ice40_half_quarter_clock _(
     clock_in  <: clock4x,
     clock_h   :> clock2x,
@@ -182,11 +209,13 @@ $$else
     clock_out :> clock2x,
   );
   uint1 clock1x = uninitialized;
+  // clock divider /2
   ice40_half_clock _(
     clock_in  <: clock2x,
     clock_out :> clock1x
   );
 $$end
+  // resets
   uint1 rst1x = uninitialized;
   clean_reset r1x<@clock1x,!reset>(
     out :> rst1x
@@ -196,6 +225,7 @@ $$end
     out :> rst2x
   );
 $$elseif SIMULATION then
+  // for simulation
 <@clock1x> {
   uint1 clock1x = uninitialized;
   uint1 clock2x = uninitialized;
@@ -208,6 +238,7 @@ $$elseif SIMULATION then
   uint1 rst1x <: reset;
   uint1 rst2x <: reset;
 $$else
+$$error('clocks are not setup properly')
 {
 $$end
 
@@ -227,7 +258,7 @@ $$end
 
   // ==============================
   // GPU
-  texmem_io     txm_io;
+  texmem_io     txm_io; // interace with texture memory
   DMC_1_gpu gpu(txm          <:>  txm_io,
                 screen_ready <:   screen_ctrl.ready);
 
@@ -245,13 +276,15 @@ $$end
   );
 
 $$if MCH2022 then
+  // parallel screen
   screen_driver screen(
     ready            :> screen_ready,
     screen_d         :> lcd_d,
     screen_dc        :> lcd_rs,
     screen_wrn       :> lcd_wr_n
   );
-$$else -- not MCH2022
+$$else
+  // SPI screen
   uint1 o_mosi(0);
   uint1 o_clk(0);
   uint1 o_dc(0);
@@ -304,7 +337,7 @@ $$if SIMULATION then
 $$end
 
   // ==============================
-  // UART
+  // UART (for printf from C-code)
   uart_out uo;
 $$if UART then
   uart_sender usend<reginputs>(
@@ -313,10 +346,24 @@ $$if UART then
   );
 $$end
 
-$$if SIMULATION then
-  uint32 iter(0);
-  uint32 last_iter(0);
+$$if MCH2022 then
+  // ==============================
+  // ESP32 SPI file interface
+  spi_file fread(
+    clk      <: clock1x,
+    resetq   <: rst1x,
+    spi_mosi <: espspi_mosi,
+    spi_miso :> espspi_miso,
+    spi_clk  <: espspi_clk,
+    spi_cs_n <: espspi_cs_n,
+    irq_n    :> espirq_n,
+  );
+  uint11 file_recv_count(0);  // count received bytes in the 1024 bytes burst
+  uint1  fread_keep_going(1); // we load at startup
 $$end
+
+  // ==============================
+  // memory mapping
 
   sameas(mem.addr)    prev_mem_addr(0);
   sameas(mem.wenable) prev_mem_wenable(0);
@@ -330,8 +377,15 @@ $$end
   // ==============================
   // main 'loop'
 
+$$if SIMULATION then
+  uint32 iter(0);
+  uint32 last_iter(0);
+$$end
+
+  // main logic
   always {
 
+    // set CPU user data
     user_data[0,24] = {
                       gpu.pickedh,
                       txm.rdata,
@@ -341,39 +395,70 @@ $$else
                       3b0,
 $$end
                       1b0,
+$$if MCH2022 then
+                      fread_keep_going,
+$$else
                       1b0,
+$$end
                       cmdq.empty,
                       txm.busy,
                       ~cmdq.full
                       };
-
-    txm.in_ready    = txm_io.in_ready;
-    txm.addr        = txm_io.addr;
-    txm_io.data     = txm.rdata;
-    txm_io.busy     = txm.busy;
-
+    // gpu commands
     gpu           .valid    = 0;
     cmdq          .in_add   = 0;
     cmdq          .in_next  = 0;
+    // screen control
     screen_ctrl   .valid    = gpu.screen_valid;
     screen_ctrl   .in_data  = gpu.screen_valid
                             ? {1b1,gpu.screen_data} : prev_mem_wdata[0,17];
     screen.valid            = screen_valid;
     screen.data_or_command  = screen_send_dc;
     screen.byte             = screen_send_byte;
-
-    uo.data_in_ready = 0;
-
 $$if MCH2022 then
-    lcd_cs_n  = 0;
-    lcd_rst_n = 1;
+    lcd_cs_n  = 0;  lcd_rst_n = 1; // keep lcd active
+    // fread: on the badge we initialize QPSRAM through the fread interface
+    // provided by the ESP32. This is not needed on e.g. the icebreaker since
+    // the SPIflash already contains the data, but that is not the case on
+    // the SPRAM (which is a writable memory and starts unitialized)
+    // On the badge the boot sequence is:
+    // - [SOC (here)]          read data from fread interface into QSPRAM
+    // - [boot (code in BRAM)] read firmware from QPSRAM to FPGA SPRAM and jump
+    fread.file_request_valid = fread_keep_going;
+    // relay texture memory access, interleave GPU and fread
+    // NOTE: the GPU is assumed idle while fread is active! (true on boot)
+    txm.in_ready     = txm_io.in_ready | fread.file_data_avail;
+    txm.wenable      = fread.file_data_avail;
+    txm.addr         = fread.file_data_avail
+                      ? {fread.file_request_offset[10,14],file_recv_count[0,10]}
+                      : txm_io.addr;
+    txm_io.data      = fread.file_data_avail ? fread.file_data : txm.rdata;
+    txm_io.busy      = txm.busy;
+    // keep going? (we load 8MB)
+    fread_keep_going = fread.file_request_offset[23,1] ? 0 : 1;
+    // increment offset when burst done
+    fread.file_request_offset = file_recv_count[10,1]
+                              ? fread.file_request_offset + 1024
+                              : fread.file_request_offset;
+    // increment/reset counter when receiving
+    file_recv_count  = ~fread.file_data_avail
+                     ?  file_recv_count
+                     : (file_recv_count[10,1] ? 0 : file_recv_count + 1);
+$$else
+    // relay texture memory access
+    txm.in_ready    = txm_io.in_ready;
+    txm.addr        = txm_io.addr;
+    txm_io.data     = txm.rdata;
+    txm_io.busy     = txm.busy;
 $$end
+    // uart
+    uo.data_in_ready = 0;
 
     // memory mapping
     if ((prev_mem_wenable != 0) & prev_mem_addr[16,1]) {
       switch (prev_mem_addr[2,4]) {
         case 4b0100: {
-          // UART
+          // UART (printf)
           uo.data_in       = prev_mem_wdata[ 0,8];
           uo.data_in_ready = ~uo.busy;
 $$if SIMULATION then
@@ -383,6 +468,7 @@ $$end
         case 4b0010: {
           switch (prev_mem_addr[0,2]) {
             case 2b00: {
+              // LEDs
 $$if SIMULATION then
               __display("(cycle %d) LEDs = %d | %d [elapsed %d]",iter,
                 prev_mem_wdata[0,32],__signed( prev_mem_wdata),iter-last_iter);
@@ -398,9 +484,9 @@ $$end
             case 2b11: {
               // SPIscreen reset
 $$if VERILATOR then
-              oled_resn = ~ prev_mem_wdata[0,1];
+              oled_resn = ~ prev_mem_wdata[0,1]; // in simulation
 $$elseif not MCH2022 then
-              o_resn    = ~ prev_mem_wdata[0,1];
+              o_resn    = ~ prev_mem_wdata[0,1]; // SPI screen
 $$end
             }
             case 2b10: {
@@ -414,6 +500,7 @@ $$end
           }
         }
         case 4b0001: {
+          // GPU commands
           if (prev_mem_addr[0,1]) {
             // received first half
             cmdq.in_command[32,32] = prev_mem_wdata[0,32];
@@ -441,8 +528,9 @@ $$end
     //                          vvvvvvv    vvvvvvv
     // leds = {$NUM_LEDS-2$b0,cmdq.full,cmdq.empty};
 
+    leds = {2b0,fread_keep_going};
+
 $$if SIMULATION then
-    // if (iter == 20000000) { __finish(); }
     iter = iter + 1;
 $$end
 

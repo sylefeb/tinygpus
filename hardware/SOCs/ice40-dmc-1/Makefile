@@ -2,7 +2,7 @@ icebreaker: prepare soc-ice40-dmc-1-risc_v.si
 	silice-make.py --no_program -s soc-ice40-dmc-1-risc_v.si -b $@ -p basic,qspiflash,oled,buttons,uart -o BUILD_$(subst :,_,$@) -t shell
 
 mch2022: prepare soc-ice40-dmc-1-risc_v.si
-	silice-make.py --no_program -s soc-ice40-dmc-1-risc_v.si -b $@ -p basic,psram,lcd,uart -o BUILD_$(subst :,_,$@)
+	silice-make.py --no_program -s soc-ice40-dmc-1-risc_v.si -b $@ -p basic,psram,lcd,uart,espspi -o BUILD_$(subst :,_,$@)
 
 verilator: prepare soc-ice40-dmc-1-risc_v.si
 	silice-make.py -s soc-ice40-dmc-1-risc_v.si -b $@ -p basic,oled -o BUILD_$(subst :,_,$@) -t shell

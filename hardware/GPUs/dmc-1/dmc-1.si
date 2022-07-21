@@ -495,12 +495,12 @@ $$end
       //        this condition (skip[0,1]) is important for 1-pixel spans
 
       // ---- start fetching next sample: one cycle before the sampler is done
-      //      so we maximize SPIflash throughput, leaving no gap
+      //      so we maximize texture memory throughput, leaving no gap
   		sampler_io.do_fetch = still_drawing & smplr_delay[$delay_bit-1$,1];
 
       // ---- a texture sample is available
       //      this happens on the next (and final) cycle of the orchestration
-      //      loop as the SPIflash controller output is registered
+      //      loop as the texture memory controller output is registered
 			if (smplr_delay[$delay_bit$,1]) {
 
 				drawing             = still_drawing; // keep drawing
