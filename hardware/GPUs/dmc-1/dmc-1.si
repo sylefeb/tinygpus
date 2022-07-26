@@ -7,8 +7,7 @@
 // | @sylefeb 2020-12-02                                                       |
 // |___________________________________________________________________________|
 // |                                                                           |
-// | TODO:                                                                     |
-// | - rename sky as background, color as parameter                            |
+// | TODO: nothing? I bet not :)                                               |
 // |                                                                           |
 // |___________________________________________________________________________|
 // |                                                                           |
@@ -71,7 +70,7 @@ interface texmem_user {
 
 // ---------------------------------------------------
 
-$$sky_pal_idx = 99
+$$bkg_pal_idx = 99
 
 // _____________________________________________________________________________
 // |                                                                           |
@@ -135,7 +134,7 @@ unit texture_sampler(
     v             = smplr.v & modv;
     // we always write a result, but it is incorrect during binding and access
     // caller has to wait the expected number of cycles so the value is ok
-    smplr.texel   = smplr.tex_id == 0 ? $sky_pal_idx$ : txm.data;
+    smplr.texel   = smplr.tex_id == 0 ? $bkg_pal_idx$ : txm.data;
     // bind or fetch
     if (binding[0,1] & (~txm.busy & ~skip_one) ) { // ---- binding
       // binding
@@ -326,7 +325,7 @@ $$end
                            - __signed({1b0,obscure_clmp[0,4]}));
     // opactiy test
     uint1 opaque     <:: ~tcol_rdy & ~skip[0,1] & (sampler_io.texel != 255);
-    uint1 sky        <:: sampler_io.tex_id == 0;
+    uint1 bkg        <:: sampler_io.tex_id == 0; // in background
     // final tex coords for walls
     uint8 wc_u_8     <:: (wc_u     );
     uint8 wc_v_8     <:: (wc_v >>11); // NOTE: has to match init
@@ -392,7 +391,7 @@ $$end
       sameas(current) pixcoord <:: current;
       //sameas(current) pixcoord <:: current;
       colbufs.addr1       = { buffer,pixcoord[0,$doomchip_height_p2$] };
-      colbufs.wdata1      = { (light[4,1] ? 4b0 : light[0,4]) | (sky ? 4d15 : 4d0),
+      colbufs.wdata1      = { (light[4,1] ? 4b0 : light[0,4]) | (bkg ? 4d15 : 4d0),
                               sampler_io.texel };
       colbufs.wenable1    = smplr_delay[$delay_bit$,1] & depth_ok & opaque;
       // ---- read/write to depth buffer
@@ -426,7 +425,8 @@ $$end
 
     if (in_start) {
       // texture id on bindings
-      uint10 tex_id  <:: in_command[0,10];
+      uint10 tex_id     <: in_command[0,10];
+      uint1  bkg_tex_id <: tex_id == 0; // is the incoming texid the background?
       // span init
       end                = terrain ? col_start : col_end;
       current            = col_start;
@@ -447,7 +447,7 @@ $$end
       ded                = plane  ? __signed(in_command[32,16])       : ded;
       dot_ray            = plane  ? __signed({in_command[48,16],8b0}) : dot_ray;
       // bind texture
-      sampler_io.do_bind = (tex_id != sampler_io.tex_id) & ~param;
+      sampler_io.do_bind = (tex_id != sampler_io.tex_id) & ~param & ~bkg_tex_id;
       sampler_io.tex_id  = ~param ? tex_id : sampler_io.tex_id;
       // walls wc_u
       wc_u               = __signed( in_command[56,8] );
@@ -483,7 +483,8 @@ $$end
 
       // ---- start fetching next sample: one cycle before the sampler is done
       //      so we maximize SPIflash throughput, leaving no gap
-  		sampler_io.do_fetch = still_drawing & smplr_delay[$delay_bit-1$,1];
+  		sampler_io.do_fetch = ~bkg & still_drawing & smplr_delay[$delay_bit-1$,1];
+      //                    ^^^^ no fetch when drawing background
 
       // ---- a texture sample is available
       //      this happens on the next (and final) cycle of the orchestration
@@ -525,11 +526,11 @@ $$end
 			} // smplr_delay[$delay_bit$,1]
 
       if (smplr_delay[$delay_bit$,1]) {
-        smplr_delay = sky ? {2b01,$delay_bit-2$b0}  : $smplr_seq_init$;
+        smplr_delay = bkg ? {1b1,$delay_bit-1$b0}  : $smplr_seq_init$;
         state       = 0;  // restart compute sequence
       } else {
         smplr_delay = (~drawing | ~sampler_io.ready | start)
-                    ? (sky ? {2b01,$delay_bit-2$b0} : $smplr_seq_init_start$)
+                    ? (bkg ? {1b1,$delay_bit-1$b0} : $smplr_seq_init_start$)
         //          ^  hold init when not drawing or just starting
                     : {smplr_delay[0,$delay_bit$],smplr_delay[$delay_bit$,1]};
         //             ^^^^ rotate orchestration sequence
