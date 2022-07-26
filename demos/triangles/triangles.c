@@ -172,7 +172,6 @@ static inline void render_frame()
 #endif
 
   // render the spans
-  int last_bound_srf = -1;
   for (int c = 0; c < SCREEN_WIDTH ; ++c) {
     // go through list
     t_span *span = span_heads[c];
@@ -181,22 +180,19 @@ static inline void render_frame()
       int rz = 256;
       int rx = c        - SCREEN_WIDTH/2;
       int ry = span->ys - SCREEN_HEIGHT/2;
-      // bind the surface to the rasterizer if necessary
-      if (last_bound_srf != span->id) {
-        surface_bind(&tsrf[span->id]);
-        last_bound_srf = span->id;
-      }
-      // sets the surface span parameters
 #ifdef DEBUG
       unsigned int tm_ss = time();
 #endif
-      surface_set_span(&tsrf[span->id], rx,ry,rz);
+      // bind the surface to the rasterizer
+      surface_bind(&tsrf[span->id]);
+      // setup the surface span parameters
+      int dr = surface_setup_span(&tsrf[span->id], rx,ry,rz);
 #ifdef DEBUG
       tm_srfspan += time() - tm_ss;
 #endif
       // column drawing
       col_send(
-        COLDRAW_PLANE_B(tsrf[span->id].ded,tsrf[span->id].dr),
+        COLDRAW_PLANE_B(tsrf[span->id].ded,dr),
         COLDRAW_COL(100 + span->id /*texture id*/, span->ys,span->ye,
                     15 /*light*/) | PLANE
       );
@@ -220,7 +216,7 @@ static inline void render_frame()
     // send end of column
     col_send(0, COLDRAW_EOC);
 
-    // clear span
+    // clear spans for thhis column
     span_heads[c] = 0;
 
     // process pending column commands
@@ -285,8 +281,6 @@ void main_0()
   // render loop
   // --------------------------
   while (1) {
-
-    // printf("frame %d\n",frame);
 
     // draw screen
     render_frame();

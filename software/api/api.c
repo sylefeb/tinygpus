@@ -51,16 +51,21 @@ static inline void col_send(unsigned int tex0,unsigned int tex1)
 
 static inline int userdata()
 {
-  int id;
-  asm volatile ("rdtime %0" : "=r"(id));
-  return id;
+  int ud;
+  asm volatile ("rdtime %0" : "=r"(ud));
+  return ud;
 }
 
 // -----------------------------------------------------
 
+static inline int col_full()
+{
+  return ((userdata()&1) == 0);
+}
+
 static inline void col_process()
 {
-  while ((userdata()&1) == 0) { /*wait fifo not full*/ }
+  while (col_full()) { /*wait fifo not full*/ }
 }
 
 static inline void wait_all_drawn()
@@ -81,16 +86,13 @@ static inline unsigned int time()
 
 static inline unsigned int core_id()
 {
-   unsigned int v;
-   asm volatile ("rdcycle %0" : "=r"(v));
-   return v&1;
+   unsigned int id;
+   asm volatile ("rdcycle %0" : "=r"(id));
+   return id&1;
 }
 
 static inline void pause(int cycles)
 {
-#ifdef SIMULATION
-  cycles = 8; // override all delays
-#endif
   unsigned int tm_start = time();
   while (time() - tm_start < cycles) { }
 }

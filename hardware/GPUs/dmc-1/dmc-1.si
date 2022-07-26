@@ -7,6 +7,11 @@
 // | @sylefeb 2020-12-02                                                       |
 // |___________________________________________________________________________|
 // |                                                                           |
+// | TODO:                                                                     |
+// | - rename sky as background, color as parameter                            |
+// |                                                                           |
+// |___________________________________________________________________________|
+// |                                                                           |
 // |  License: CERN-OHL-S                                                      |
 // |     A copy of the license full text is included in                        |
 // |     the distribution, please refer to it for details.                     |
@@ -109,12 +114,6 @@ unit texture_sampler(
   uint11 v(0);          // v fetch coordinate
   uint24 fetch_addr(0); // fetch address (from u,v)
 
-$$if SIMULATION then
-  int32 cycle(0);
-  int32 cycle_bnd_start(0);
-  int32 cycles_in_bnd(0);
-$$end
-
   always {
     uint1  starting   <:: (~binding[0,1]) & smplr.do_bind;
     uint11 modu       <:: ((1<<tex_wp2)-1);
@@ -124,9 +123,6 @@ $$end
     // update binding (takes multiple cycles, continues while binding[0,1] == 1)
     binding       = starting ? 6b011111
                              : ((~txm.busy & ~skip_one) ? binding>>1 : binding);
-$$if SIMULATION then
-    cycle_bnd_start = starting ? cycle : cycle_bnd_start;
-$$end
     smplr.ready   = ~binding[0,1];  // ready to sample when not binding
     // next fetch address (not u,v are from previous cycle, see below)
     fetch_next    = smplr.do_fetch; // fetch on next cycle
@@ -159,12 +155,6 @@ $$end
       }
       tex_wp2        = txm.data[0,4]; // written last, so no condition
       tex_hp2        = txm.data[4,4];
-$$if SIMULATION then
-      if (~binding[1,1]) {
-        cycles_in_bnd = cycles_in_bnd + __signed(1) + (cycle - cycle_bnd_start);
-        //__display("cycles in binding: %d\n",cycles_in_bnd);
-      }
-$$end
     } else {                                      // ---- fetching
       skip_one      = 0;
       // fetch next sample
@@ -173,9 +163,6 @@ $$end
                      : fetch_addr;
       txm.in_ready   = fetch_next;
     }
-$$if SIMULATION then
-    cycle = cycle + 1;
-$$end
   }
 }
 
@@ -538,14 +525,14 @@ $$end
 			} // smplr_delay[$delay_bit$,1]
 
       if (smplr_delay[$delay_bit$,1]) {
-        smplr_delay = $smplr_seq_init$;
+        smplr_delay = sky ? {2b01,$delay_bit-2$b0}  : $smplr_seq_init$;
         state       = 0;  // restart compute sequence
       } else {
         smplr_delay = (~drawing | ~sampler_io.ready | start)
-                    ? $smplr_seq_init_start$
-                    // ^^^^  hold init when not drawing or just starting
+                    ? (sky ? {2b01,$delay_bit-2$b0} : $smplr_seq_init_start$)
+        //          ^  hold init when not drawing or just starting
                     : {smplr_delay[0,$delay_bit$],smplr_delay[$delay_bit$,1]};
-                    // ^^^^ rotate orchestration sequence
+        //             ^^^^ rotate orchestration sequence
         if (start) { state = 0; } // restart compute sequence
         start       = (start & ~sampler_io.ready); // keep high if not ready
       }
@@ -575,8 +562,6 @@ unit column_sender(
   output uint16              screen_data,
   output uint1               busy(1),
 ) {
-  //uint32 cycle(0);
-
   brom uint18 palette[256] = {$palette666$};
 
   uint8  count(8d$doomchip_height$);
@@ -613,8 +598,6 @@ $$end
     palette.addr  = colbufs.rdata0[0,8];
     // lookup next pixel in column buffer
     colbufs.addr0 = { buffer,count[0,$doomchip_height_p2$] };
-
-    //cycle = cycle + 1;
   }
 }
 

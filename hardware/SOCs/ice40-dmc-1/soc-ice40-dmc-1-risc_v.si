@@ -28,8 +28,7 @@ $$else
   import('../../common/ice40_half_clock.v')
 $$end
 $$else
-  // overclocking at 60 MHz seems to be fine and we need that to drive SPI
-  // com at 30 MHz with the badge ESP32 (to load data from file)
+  // overclocking at 60 MHz seems to be fine
   $$master_freq = 60
   $$uart_in_clock_freq_mhz = master_freq//2
   $include('../../common/qpsram2x.si')

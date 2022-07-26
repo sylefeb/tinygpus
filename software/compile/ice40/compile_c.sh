@@ -28,12 +28,11 @@ fi
 
 $ARCH-as -march=$riscarch -mabi=ilp32 -o crt0.o crt0.s
 
-$ARCH-gcc -O3 -nostartfiles -ffunction-sections -fdata-sections -fno-stack-protector -fno-pic -fno-builtin -march=$riscarch -mabi=ilp32 -I$CALL_DIR -I$API -I$SCRI_DIR -T $CFG_LD -o build/code.elf $CALL_DIR/$1 crt0.o
+$ARCH-gcc -g -O3 -nostartfiles -ffunction-sections -fdata-sections -fno-stack-protector -fno-pic -fno-builtin -march=$riscarch -mabi=ilp32 -I$CALL_DIR -I$API -I$SCRI_DIR -T $CFG_LD -o build/code.elf $CALL_DIR/$1 crt0.o
 
 $ARCH-objcopy -O verilog build/code.elf build/code.hex
 
-popd
+# uncomment to dump a disassembly of the code, usefull for debugging
+$ARCH-objdump.exe -drwCS build/code.elf > build/disasm.txt
 
-# uncomment to see the actual code, usefull for debugging
-# $ARCH-objcopy.exe -O binary build/code.elf build/code.bin
-# $ARCH-objdump.exe -D -b binary -m riscv build/code.bin
+popd

@@ -138,9 +138,9 @@ static inline void render_frame()
         int light = (tsrfs[s].nz>>4);
         if (light > 15) light = 15;
 
-        surface_set_span(&tsrfs[s], rx,ry,rz);
+        int dr = surface_setup_span(&tsrfs[s], rx,ry,rz);
         col_send(
-          COLDRAW_PLANE_B(tsrfs[s].ded,tsrfs[s].dr),
+          COLDRAW_PLANE_B(tsrfs[s].ded,dr),
           COLDRAW_COL(125/*texture id*/, rtris[s].ys,rtris[s].ye, light) | PLANE
         );
 

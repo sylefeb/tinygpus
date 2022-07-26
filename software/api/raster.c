@@ -295,7 +295,7 @@ typedef struct {
   int ux,uy,uz;
   int vx,vy,vz;
   int u_offs,v_offs;
-  int dr,ded;
+  int ded;
 } trsf_surface;
 
 typedef int          int32_t;
@@ -406,7 +406,7 @@ static inline void surface_transform(const surface *s,trsf_surface *ts,
 }
 
 // ____________________________________________________________________________
-// Sets surface UV parameters
+// Binds the surface for rendering (sets UV parameters)
 static inline void surface_bind(trsf_surface *s)
 {
 #ifndef EMUL
@@ -418,19 +418,19 @@ static inline void surface_bind(trsf_surface *s)
 }
 
 // ____________________________________________________________________________
-// Set surface parameters for the span
-static inline void surface_set_span(trsf_surface *s,int rx,int ry,int rz)
+// Setup surface parameters for the span (return the dr parameter)
+static inline int surface_setup_span(trsf_surface *s,int rx,int ry,int rz)
 {
-#ifndef EMUL
-  s->dr  = dot3( rx,ry,rz, s->nx,s->ny,s->nz )>>8;
+  int dr = dot3( rx,ry,rz, s->nx,s->ny,s->nz )>>8;
   int du = dot3( rx,ry,rz, s->ux,s->uy,s->uz )>>8;
   int dv = dot3( rx,ry,rz, s->vx,s->vy,s->vz )>>8;
-
+#ifndef EMUL
   col_send(
     PARAMETER_PLANE_A(s->ny,s->uy,s->vy),
     PARAMETER_PLANE_A_EX(du,dv) | PARAMETER
   );
 #endif
+  return dr;
 }
 
 // ____________________________________________________________________________
