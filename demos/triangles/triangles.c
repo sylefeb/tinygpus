@@ -3,8 +3,6 @@
 // |  Many triangles demo                                                      |
 // |  ===================                                                      |
 // |                                                                           |
-// |  work in progress                                                         |
-// |                                                                           |
 // | @sylefeb 2022-07-15  licence: GPL v3, see full text in repo               |
 // |___________________________________________________________________________|
 
@@ -16,6 +14,7 @@
 #include "raster.c"
 
 //#define DEBUG
+// ^^^^^^^^^^^^ uncomment to get profiling info over UART
 
 // -----------------------------------------------------
 // Rotations
