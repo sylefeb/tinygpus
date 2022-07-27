@@ -112,7 +112,11 @@ unit texture_sampler(
   uint11 u(0);          // u fetch coordinate
   uint11 v(0);          // v fetch coordinate
   uint24 fetch_addr(0); // fetch address (from u,v)
-
+$$if SIMULATION then
+  uint24 prev_fetch_addr(0);
+  uint32 num_hits(0);
+  uint32 num_fetch(0);
+$$end
   always {
     uint1  starting   <:: (~binding[0,1]) & smplr.do_bind;
     uint11 modu       <:: ((1<<tex_wp2)-1);
@@ -161,6 +165,22 @@ unit texture_sampler(
                      ? txm.addr
                      : fetch_addr;
       txm.in_ready   = fetch_next;
+$$if SIMULATION then
+      // evaluating caching ; bottom line: not helpful unless MIP-mapped
+      if (fetch_next) {
+        if (fetch_addr[2,22] == prev_fetch_addr[2,22]) {
+          num_hits = num_hits + 1;
+        } else {
+          prev_fetch_addr = fetch_addr;
+        }
+        if (num_fetch == 1000000) {
+          //__display("num_fetches %d num_hits %d",num_fetch,num_hits);
+          //__finish();
+        }
+        num_fetch = num_fetch + 1;
+      }
+$$end
+
     }
   }
 }
@@ -482,13 +502,13 @@ $$end
       //        this condition (skip[0,1]) is important for 1-pixel spans
 
       // ---- start fetching next sample: one cycle before the sampler is done
-      //      so we maximize SPIflash throughput, leaving no gap
+      //      so we maximize texture memory throughput, leaving no gap
   		sampler_io.do_fetch = ~bkg & still_drawing & smplr_delay[$delay_bit-1$,1];
       //                    ^^^^ no fetch when drawing background
 
       // ---- a texture sample is available
       //      this happens on the next (and final) cycle of the orchestration
-      //      loop as the SPIflash controller output is registered
+      //      loop as the texture memory controller output is registered
 			if (smplr_delay[$delay_bit$,1]) {
 
 				drawing             = still_drawing; // keep drawing

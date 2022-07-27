@@ -288,7 +288,7 @@ $$else -- not MCH2022
     spiflash_rom txm(
       clkspi <: clock4x,
   $$else
-    spiflash_rom txm<@clock2x,!rst2x,reginputs> (
+    spiflash_rom_core txm<@clock2x,!rst2x,reginputs> (
   $$end
       sf_clk  :> sf_clk,    sf_csn  :> sf_csn,
       sf_io0 <:> sf_io0,    sf_io1 <:> sf_io1,
