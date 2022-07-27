@@ -3,7 +3,7 @@
 // |  Interleaved rotating tetrahedrons demo                                   |
 // |  ======================================                                   |
 // |                                                                           |
-// | Draws two rotating tetrahedron using the DMC-1 GPU                        |
+// | Draws two rotating tetrahedrons using the DMC-1 GPU                       |
 // |                                                                           |
 // | @sylefeb 2022-07-26  licence: GPL v3, see full text in repo               |
 // |___________________________________________________________________________|
