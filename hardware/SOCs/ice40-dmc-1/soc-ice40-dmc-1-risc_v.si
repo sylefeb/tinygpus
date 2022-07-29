@@ -10,28 +10,19 @@
 // |     the distribution, please refer to it for details.                     |
 // |___________________________________________________________________________|
 
-// Below we can choose between spiflash 2x or 4x
-// Using 4x would allow faster texture accesses, but is not stable/working yet
-// Using 2x works and allows (some) overclocking
-$$spi4x = nil
+$$SIMUL_QPSRAM=1
 
-$$if not MCH2022 then
-$$if spi4x then
-  $$master_freq = 100
-  $$uart_in_clock_freq_mhz = master_freq//4
-  $include('../../common/spiflash4x.si')
-  import('../../common/ice40_half_quarter_clock.v')
-$$else
-  $$master_freq = 50
-  $$uart_in_clock_freq_mhz = master_freq//2
-  $include('../../common/spiflash2x.si')
-  import('../../common/ice40_half_clock.v')
-$$end
-$$else
+$$if MCH2022 or (SIMULATION and SIMUL_QPSRAM) then
   // overclocking at 60 MHz seems to be fine
   $$master_freq = 60
   $$uart_in_clock_freq_mhz = master_freq//2
   $include('../../common/qpsram2x.si')
+  import('../../common/ice40_half_clock.v')
+$$else
+  // overclocking at 60 MHz seems to be fine (rarely fails to run)
+  $$master_freq = 50
+  $$uart_in_clock_freq_mhz = master_freq//2
+  $include('../../common/spiflash2x.si')
   import('../../common/ice40_half_clock.v')
 $$end
 
@@ -39,7 +30,7 @@ $include('../../common/uart.si')
 
 // A small BRAM contains the bootloader (firmware/boot.c)
 $$bram_depth         = 9
-// Using 320x240 screen
+// Configure SPI screen (if used)
 $$ST7789             = 1
 // Use all 128KB of SPRAM
 $$SPRAM_128K         = 1
@@ -108,6 +99,22 @@ algorithm pll(
 $$end
 
 // --------------------------------------------------
+// A helper unit that converts the data available 2x pulse
+// into a high signal (allows to cross 2x => 1x since once
+// data starts coming, it comes at every 1x cycle
+// --------------------------------------------------
+
+unit adapterDataAvailable(
+  input   uint1 valid,
+  input   uint1 data_avail_pulse,
+  output! uint1 data_avail_high)
+{
+  always {
+    data_avail_high = ~valid ? 0 : (data_avail_high | data_avail_pulse);
+  }
+}
+
+// --------------------------------------------------
 // Design main
 // --------------------------------------------------
 
@@ -161,20 +168,6 @@ $$end
 $$if ICE40 then
 <@clock1x,!rst1x> {
 
-$$if spi4x then
-  uint1 clock4x = uninitialized;
-  pll pllgen(
-    clock_in  <: clock,
-    clock_out :> clock4x,
-  );
-  uint1 clock1x = uninitialized;
-  uint1 clock2x = uninitialized;
-  ice40_half_quarter_clock _(
-    clock_in  <: clock4x,
-    clock_h   :> clock2x,
-    clock_q   :> clock1x,
-  );
-$$else
   uint1 clock2x = uninitialized;
   pll pllgen(
     clock_in  <: clock,
@@ -185,7 +178,7 @@ $$else
     clock_in  <: clock2x,
     clock_out :> clock1x
   );
-$$end
+
   uint1 rst1x = uninitialized;
   clean_reset r1x<@clock1x,!reset>(
     out :> rst1x
@@ -277,29 +270,32 @@ $$end
 
   // ==============================
   // texture memory
-$$if MCH2022 then
+$$if MCH2022 or (SIMULATION and SIMUL_QPSRAM) then
     qpsram_ram txm<@clock2x,!rst2x,reginputs> (
       ram_clk  :> ram_clk,  ram_csn :>  ram_csn,
       ram_io0 <:> ram_io0,  ram_io1 <:> ram_io1,
       ram_io2 <:> ram_io2,  ram_io3 <:> ram_io3,
     );
 $$else -- not MCH2022
-  $$if spi4x then
-    spiflash_rom txm(
-      clkspi <: clock4x,
-  $$else
     spiflash_rom_core txm<@clock2x,!rst2x,reginputs> (
-  $$end
       sf_clk  :> sf_clk,    sf_csn  :> sf_csn,
       sf_io0 <:> sf_io0,    sf_io1 <:> sf_io1,
       sf_io2 <:> sf_io2,    sf_io3 <:> sf_io3,
     );
 $$end
+    // adapts the data available pulse across clock domains
+    adapterDataAvailable _<@clock2x>(
+      valid            <: txm_io.in_ready,
+      data_avail_pulse <: txm.rdata_available,
+      data_avail_high  :> txm_io.data_available
+    );
 
 $$if SIMULATION then
   // for simulation, create dummy vars
-  uint1 sf_csn(1); uint1 sf_clk(0); uint1 sf_io0(0);
-  uint1 sf_io1(0); uint1 sf_io2(0); uint1 sf_io3(0);
+  uint1 sf_csn(1);  uint1 sf_clk(0);  uint1 sf_io0(0);
+  uint1 sf_io1(0);  uint1 sf_io2(0);  uint1 sf_io3(0);
+  uint1 ram_csn(1); uint1 ram_clk(0); uint1 ram_io0(0);
+  uint1 ram_io1(0); uint1 ram_io2(0); uint1 ram_io3(0);
 $$end
 
   // ==============================
@@ -346,10 +342,14 @@ $$end
                       ~cmdq.full
                       };
 
-    txm.in_ready    = txm_io.in_ready;
-    txm.addr        = txm_io.addr;
-    txm_io.data     = txm.rdata;
-    txm_io.busy     = txm.busy;
+    // texture memory interface
+    txm.in_ready            = txm_io.in_ready;
+    txm.addr                = txm_io.addr;
+    txm_io.data             = txm.rdata;
+    txm_io.busy             = txm.busy;
+$$if MCH2022 then
+    txm.wenable             = 0;
+$$end
 
     gpu           .valid    = 0;
     cmdq          .in_add   = 0;

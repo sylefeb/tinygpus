@@ -13,15 +13,26 @@
 
 $include("dmc-1.si")
 
-$$if spi4x then
-$$error('spi4x not supported by standalone version')
-$$end
-
 $$if not MCH2022 then
   $include('../../common/spiflash2x.si')
 $$else
   $include('../../common/qpsram2x.si')
 $$end
+
+// ___________________________________________________________________________
+// A helper unit that converts the data available 2x pulse it into a
+// high signal (allows to cross 2x => 1x since once data starts coming,
+// it comes at every 1x cycle
+
+unit adapterDataAvailable(
+  input   uint1 valid,
+  input   uint1 data_avail_pulse,
+  output! uint1 data_avail_high)
+{
+  always {
+    data_avail_high = ~valid ? 0 : (data_avail_high | data_avail_pulse);
+  }
+}
 
 // ___________________________________________________________________________
 // The standalone version includes the memory controller
@@ -48,23 +59,24 @@ unit DMC_1_gpu_standalone(
   // ==============================
   // texture memory
 $$if MCH2022 then
-    qpsram_ram txm<@clock2x,reginputs> (
-      ram_clk  :> ram_clk,  ram_csn :>  ram_csn,
-      ram_io0 <:> ram_io0,  ram_io1 <:> ram_io1,
-      ram_io2 <:> ram_io2,  ram_io3 <:> ram_io3,
-    );
+  qpsram_ram txm<@clock2x,reginputs> (
+    ram_clk  :> ram_clk,  ram_csn :>  ram_csn,
+    ram_io0 <:> ram_io0,  ram_io1 <:> ram_io1,
+    ram_io2 <:> ram_io2,  ram_io3 <:> ram_io3,
+  );
 $$else -- not MCH2022
-  $$if spi4x then
-    spiflash_rom txm(
-      clkspi <: clock4x,
-  $$else
-    spiflash_rom_core txm<@clock2x,reginputs> (
-  $$end
-      sf_clk  :> ram_clk,   sf_csn  :> ram_csn,
-      sf_io0 <:> ram_io0,   sf_io1 <:> ram_io1,
-      sf_io2 <:> ram_io2,   sf_io3 <:> ram_io3,
-    );
+  spiflash_rom_core txm<@clock2x,reginputs> (
+    sf_clk  :> ram_clk,   sf_csn  :> ram_csn,
+    sf_io0 <:> ram_io0,   sf_io1 <:> ram_io1,
+    sf_io2 <:> ram_io2,   sf_io3 <:> ram_io3,
+  );
 $$end
+  // adapts the data available pulse across clock domains
+  adapterDataAvailable _<@clock2x>(
+    valid            <: txm_io.in_ready,
+    data_avail_pulse <: txm.rdata_available,
+    data_avail_high  :> txm_io.data_available
+  );
 
   // ==============================
   // GPU
@@ -73,7 +85,7 @@ $$end
                 <:auto:>);
 
   always {
-    // memory interface
+    // texture memory interface
     txm.in_ready = txm_io.in_ready;
     txm.addr     = txm_io.addr;
     txm_io.data  = txm.rdata;

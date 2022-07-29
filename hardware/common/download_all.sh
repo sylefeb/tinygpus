@@ -21,7 +21,6 @@ wget $OPT $SILICE_URL/projects/common/divint_std.si
 wget $OPT $SILICE_URL/projects/common/uart.si
 wget $OPT $SILICE_URL/projects/common/verilator_data.v
 wget $OPT $SILICE_URL/projects/spiflash/spiflash2x.si
-wget $OPT $SILICE_URL/projects/spiflash/spiflash4x.si
 wget $OPT $SILICE_URL/projects/spiflash/ddr_clock.v
 wget $OPT $SILICE_URL/projects/ice-v/CPUs/ice-v-dual.si
 wget $OPT $MCH2022_SILICE_URL/common/qpsram2x.si

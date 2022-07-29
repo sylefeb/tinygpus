@@ -58,6 +58,7 @@ group texmem_io {
   uint1      in_ready(0),
   uint24     addr(0),
   uint8      data(0),
+  uint1      data_available(0),
   uint1      busy(1),
 }
 
@@ -65,6 +66,7 @@ interface texmem_user {
   output in_ready,
   output addr,
   input  data,
+  input  data_available,
   input  busy,
 }
 
@@ -100,14 +102,13 @@ unit texture_sampler(
   sampler2D_provider smplr,  // texture sampler interface
   texmem_user        txm,    // texture memory interface
 ) {
-  uint13 tbl_addr(0);   // texture info address in header table
-  uint6  binding(0);    // reads 4 bytes on binding (addrx3 whx1)
+  uint13 tbl_addr <:: {smplr.tex_id,3b000}; // texture record address (8 bytes)
+  uint5  binding(0);    // reads 4 bytes on binding (addrx3 whx1)
   uint24 tex_addr(0);   // base texture address
   uint4  tex_wp2(0);    // texture width pow2
   uint4  tex_hp2(0);    // texture height pow2
 
   uint1  fetch_next(0); // fetch on next cycle
-  uint1  skip_one(0);   // wait one cycle (for txm.busy to rise)
 
   uint11 u(0);          // u fetch coordinate
   uint11 v(0);          // v fetch coordinate
@@ -116,17 +117,19 @@ $$if SIMULATION then
   uint24 prev_fetch_addr(0);
   uint32 num_hits(0);
   uint32 num_fetch(0);
+  uint32 cycle(0);
 $$end
   always {
-    uint1  starting   <:: (~binding[0,1]) & smplr.do_bind;
+    uint1  startbind  <:: (~binding[0,1]) & smplr.do_bind;
     uint11 modu       <:: ((1<<tex_wp2)-1);
     uint11 modv       <:: ((1<<tex_hp2)-1);
-    // maintain memory tirgger low, pulse high on access
-    txm.in_ready  = 0;
     // update binding (takes multiple cycles, continues while binding[0,1] == 1)
-    binding       = starting ? 6b011111
-                             : ((~txm.busy & ~skip_one) ? binding>>1 : binding);
-    smplr.ready   = ~binding[0,1];  // ready to sample when not binding
+    binding       = startbind ? 5b11111
+                              : (txm.data_available ? binding>>1 : binding);
+    // memory trigger pulse high on access, and is maintained high while binding
+    // (continuous read)            vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv last
+    txm.in_ready  = binding[0,1] & (~txm.data_available | binding[1,1]);
+    smplr.ready   = ~txm.in_ready; // ready to sample when not binding
     // next fetch address (not u,v are from previous cycle, see below)
     fetch_next    = smplr.do_fetch; // fetch on next cycle
     fetch_addr    = tex_addr + (u | (v << tex_wp2)); // compute fetch address
@@ -137,33 +140,30 @@ $$end
     u             = smplr.u & modu;
     v             = smplr.v & modv;
     // we always write a result, but it is incorrect during binding and access
-    // caller has to wait the expected number of cycles so the value is ok
+    // caller has to wait the expected number of cycles so the value is correct
     smplr.texel   = smplr.tex_id == 0 ? $bkg_pal_idx$ : txm.data;
-    // bind or fetch
-    if (binding[0,1] & (~txm.busy & ~skip_one) ) { // ---- binding
-      // binding
-      skip_one     = 1;
-      // setup next read
-      tbl_addr     = binding[4,1] ? {smplr.tex_id,3b000} //_ 8 bytes per record
-                                 : (tbl_addr + 1);      // next byte in record
+    // bind or fetch?
+    if (binding[0,1]) { // ---- binding
+      // record address
       txm.addr     = {11b00100000000,tbl_addr};
-      //                  ^ texture header is at 2MB offset
-      txm.in_ready = binding[1,1];
-      // store result
-      switch (binding[1,3]) {
-        case 3b111: { tex_addr[ 0,8] = txm.data; }
-        case 3b011: { tex_addr[ 8,8] = txm.data; }
-        case 3b001: { tex_addr[16,8] = txm.data; }
-        default: { }
+      //                   ^ texture header is at 2MB offset
+      if (txm.data_available) {
+$$if SIMULATION then
+        // __display("[%d] texid %x, binding %b, data %x",cycle,smplr.tex_id,binding,txm.data);
+$$end
+        // store result
+        switch (binding[1,3]) {
+          case 3b111: { tex_addr[ 0,8] = txm.data; }
+          case 3b011: { tex_addr[ 8,8] = txm.data; }
+          case 3b001: { tex_addr[16,8] = txm.data; }
+          default: { }
+        }
+        tex_wp2        = txm.data[0,4]; // written last, so no condition
+        tex_hp2        = txm.data[4,4];
       }
-      tex_wp2        = txm.data[0,4]; // written last, so no condition
-      tex_hp2        = txm.data[4,4];
-    } else {                                      // ---- fetching
-      skip_one      = 0;
+    } else {                                               // ---- fetching
       // fetch next sample
-      txm.addr       = binding[0,1]
-                     ? txm.addr
-                     : fetch_addr;
+      txm.addr       = fetch_addr;
       txm.in_ready   = fetch_next;
 $$if SIMULATION then
       // evaluating caching ; bottom line: not helpful unless MIP-mapped
@@ -180,8 +180,10 @@ $$if SIMULATION then
         num_fetch = num_fetch + 1;
       }
 $$end
-
     }
+$$if SIMULATION then
+    cycle = cycle + 1;
+$$end
   }
 }
 
@@ -289,11 +291,7 @@ $$end
 $$if MCH2022 then
   $$delay_bit = 12
 $$else
-$$if spi4x then
-  $$delay_bit = 7
-$$else
   $$delay_bit = 9
-$$end
 $$end
   // rotating bit vector implementing the per-pixel cycle, such that
   // the pixel computation is done when the MSB is 1
@@ -311,21 +309,11 @@ $$if MCH2022 then
   //                                                 ^^^ terrain needs +3 cyles
   $$ smplr_seq_init_start = smplr_seq_init
 $$else
-$$if spi4x then
-  // fetch is 4 cycles
-  $$ smplr_seq_init       = '{2b0,plane|wall,1b0,1b0,terrain,1b0}'
-  //                              ^^^^ plane and wall go as fast as texlkup
-  //                                                 ^^^ terrain needs +3 cyles
-  $$ smplr_seq_init_start = '{3b0,plane|wall,1b0,1b0,terrain}'
-  //                          ^^^
-  // init needs one additional cycle to warm up the pipeline
-$$else
   // fetch is 7 cycles
   $$ smplr_seq_init       = '{5b0,plane|wall,1b0,1b0,terrain}'
   //                              ^^^^ plane and wall go as fast as texlkup
   //                                                 ^^^ terrain needs +3 cyles
   $$ smplr_seq_init_start = smplr_seq_init
-$$end
 $$end
 
   always {
@@ -482,13 +470,7 @@ $$end
       drawing            = ~param; // if not param, we start drawing
       start              = ~param;
       // skip allow to warm up the pipeline
-$$if spi4x then
-      skip               = {~wall,2b11};
-      //                    ^^^^^
-      // for walls skip two iterations, three for others
-$$else
       skip               = 3b011;  // no pixel writes on two first iterations
-$$end
       // terrain
       tcol_rdy           = 0; // next column height ready
       pickh_done         = 0; // picking done
