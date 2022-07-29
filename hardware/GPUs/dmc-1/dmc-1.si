@@ -113,12 +113,6 @@ unit texture_sampler(
   uint11 u(0);          // u fetch coordinate
   uint11 v(0);          // v fetch coordinate
   uint24 fetch_addr(0); // fetch address (from u,v)
-$$if SIMULATION then
-  uint24 prev_fetch_addr(0);
-  uint32 num_hits(0);
-  uint32 num_fetch(0);
-  uint32 cycle(0);
-$$end
   always {
     uint1  startbind  <:: (~binding[0,1]) & smplr.do_bind;
     uint11 modu       <:: ((1<<tex_wp2)-1);
@@ -148,9 +142,6 @@ $$end
       txm.addr     = {11b00100000000,tbl_addr};
       //                   ^ texture header is at 2MB offset
       if (txm.data_available) {
-$$if SIMULATION then
-        // __display("[%d] texid %x, binding %b, data %x",cycle,smplr.tex_id,binding,txm.data);
-$$end
         // store result
         switch (binding[1,3]) {
           case 3b111: { tex_addr[ 0,8] = txm.data; }
@@ -165,25 +156,7 @@ $$end
       // fetch next sample
       txm.addr       = fetch_addr;
       txm.in_ready   = fetch_next;
-$$if SIMULATION then
-      // evaluating caching ; bottom line: not helpful unless MIP-mapped
-      if (fetch_next) {
-        if (fetch_addr[2,22] == prev_fetch_addr[2,22]) {
-          num_hits = num_hits + 1;
-        } else {
-          prev_fetch_addr = fetch_addr;
-        }
-        if (num_fetch == 1000000) {
-          //__display("num_fetches %d num_hits %d",num_fetch,num_hits);
-          //__finish();
-        }
-        num_fetch = num_fetch + 1;
-      }
-$$end
     }
-$$if SIMULATION then
-    cycle = cycle + 1;
-$$end
   }
 }
 
