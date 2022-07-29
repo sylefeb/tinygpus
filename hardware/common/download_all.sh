@@ -1,5 +1,5 @@
 #!/bin/bash
-SILICE_URL=https://raw.githubusercontent.com/sylefeb/Silice/draft
+SILICE_URL=https://raw.githubusercontent.com/sylefeb/Silice/main
 MCH2022_SILICE_URL=https://raw.githubusercontent.com/sylefeb/mch2022-silice/main/
 OPT=-nc
 wget $OPT $SILICE_URL/projects/common/plls/icebrkr_25.v
