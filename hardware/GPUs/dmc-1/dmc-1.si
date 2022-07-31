@@ -261,7 +261,7 @@ $$end
   int32  a(0);  int32  b(0);  int32  c(0);
 
   // ---- orchestration
-$$if MCH2022 then
+$$if MCH2022 or (SIMULATION and SIMUL_QPSRAM) then
   $$delay_bit = 12
 $$else
   $$delay_bit = 9
@@ -275,7 +275,7 @@ $$end
   // take into account the various delays for texel fetch
   // - LSB are most delayed
   // - only one of wall, plane, terrain is 1
-$$if MCH2022 then
+$$if MCH2022 or (SIMULATION and SIMUL_QPSRAM) then
   // fetch is 10 cycles
   $$ smplr_seq_init       = '{8b0,plane|wall,1b0,1b0,terrain}'
   //                              ^^^^ plane and wall go as fast as texlkup
@@ -569,15 +569,6 @@ $$else
 $$end
     // count sent pixels
     count         = in_start ? 0 : ((next & screen_ready) ? count + 1 : count);
-$$if SIMULATION then
-    if (in_start) {
-      //__write("\n");
-    }
-    if (next & screen_ready) {
-      //__write("%h",colbufs.rdata0[0,8]);
-      //__display("[gpu::column_sender] sending next (%d)",count);
-    }
-$$end
     // lookup next color in palette
     palette.addr  = colbufs.rdata0[0,8];
     // lookup next pixel in column buffer
