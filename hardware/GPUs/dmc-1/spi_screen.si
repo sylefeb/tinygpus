@@ -50,7 +50,7 @@ $$end
 
     screen_valid = 0; // maintain low
 
-    if (valid) {
+    if (valid & ready) {
       current_data = in_data[0,16];
       current_cfg  = in_data[16,1] ? 4b1010 : {2b0,1b1,in_data[8,1]};
       screen_valid = 1;
@@ -76,9 +76,9 @@ $$end
     send_dc      = ~ current_cfg [0,1]; // data or command
     ready        = ~ twice[0,1];        // ready when both sent
 $$if SIMULATION then
-    //if (screen_valid) {
-    //  __display("[screen buffer %d] sending next",cycle);
-    //}
+    if (screen_valid) {
+      //__display("[screen buffer %d] sending next (ready:%b)",cycle,ready);
+    }
     cycle = cycle + 1;
 $$end
   }

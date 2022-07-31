@@ -10,7 +10,7 @@
 // |     the distribution, please refer to it for details.                     |
 // |___________________________________________________________________________|
 
-$$SIMUL_QPSRAM=1
+$$SIMUL_QPSRAM=nil
 
 $$if MCH2022 or (SIMULATION and SIMUL_QPSRAM) then
   // overclocking at 60 MHz seems to be fine

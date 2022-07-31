@@ -13,10 +13,10 @@
 
 $include("dmc-1.si")
 
-$$if not MCH2022 then
-  $include('../../common/spiflash2x.si')
-$$else
+$$if MCH2022 or (SIMULATION and SIMUL_QPSRAM) then
   $include('../../common/qpsram2x.si')
+$$else
+  $include('../../common/spiflash2x.si')
 $$end
 
 // ___________________________________________________________________________
@@ -27,7 +27,8 @@ $$end
 unit adapterDataAvailable(
   input   uint1 valid,
   input   uint1 data_avail_pulse,
-  output! uint1 data_avail_high)
+  output! uint1 data_avail_high
+)
 {
   always {
     data_avail_high = ~valid ? 0 : (data_avail_high | data_avail_pulse);
@@ -46,7 +47,7 @@ unit DMC_1_gpu_standalone(
   input   uint1   screen_ready,
   output  uint1   screen_valid(0),
   output  uint16  screen_data,
-  // memory interface (SPIflash or QPSRAM)
+  // texture memory interface
   input   uint1   clock2x,
   output  uint1   ram_clk,
   output  uint1   ram_csn,
@@ -58,13 +59,13 @@ unit DMC_1_gpu_standalone(
 
   // ==============================
   // texture memory
-$$if MCH2022 then
+$$if MCH2022 or (SIMULATION and SIMUL_QPSRAM) then
   qpsram_ram txm<@clock2x,reginputs> (
     ram_clk  :> ram_clk,  ram_csn :>  ram_csn,
     ram_io0 <:> ram_io0,  ram_io1 <:> ram_io1,
     ram_io2 <:> ram_io2,  ram_io3 <:> ram_io3,
   );
-$$else -- not MCH2022
+$$else
   spiflash_rom_core txm<@clock2x,reginputs> (
     sf_clk  :> ram_clk,   sf_csn  :> ram_csn,
     sf_io0 <:> ram_io0,   sf_io1 <:> ram_io1,
@@ -90,6 +91,9 @@ $$end
     txm.addr     = txm_io.addr;
     txm_io.data  = txm.rdata;
     txm_io.busy  = txm.busy;
+$$if MCH2022 or (SIMULATION and SIMUL_QPSRAM) then
+    txm.wenable  = 0;
+$$end
   }
 
 }

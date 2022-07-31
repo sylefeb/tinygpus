@@ -7,6 +7,9 @@ mch2022: prepare soc-ice40-dmc-1-standalone.si
 verilator: prepare soc-ice40-dmc-1-standalone.si
 	silice-make.py -s soc-ice40-dmc-1-standalone.si -b $@ -p basic,oled -o BUILD_$(subst :,_,$@) -t shell
 
+icarus: prepare soc-ice40-dmc-1-standalone.si
+	silice-make.py -s soc-ice40-dmc-1-standalone.si -b $@ -p basic -o BUILD_$(subst :,_,$@) -t shell
+
 prepare:
 	rm -rf ./build
 	pushd . ; cd ../../common ; ./download_all.sh ; popd

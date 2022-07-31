@@ -56,7 +56,7 @@ $$end
     screen_valid   = 0; // maintain low
     ready          = 1;
 
-    if (valid) {
+    if (valid & ~working[0,1]) {
 $$if SIMULATION then
       //__display("[screen_controller %d] [screen_valid] sending",cycle);
 $$end

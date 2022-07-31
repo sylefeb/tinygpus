@@ -10,11 +10,9 @@
 // |     the distribution, please refer to it for details.                     |
 // |___________________________________________________________________________|
 
-// Below we can choose between spiflash 2x or 4x
-// Using 4x allows faster texture accesses (currently less stable)
-// Using 2x allows (some) overclocking
+$$SIMUL_QPSRAM  = 1
 
-$$uart_bauds = 115200
+$$uart_bauds    = 115200
 
 $$if SIMULATION then
   $$master_freq = 50
@@ -75,28 +73,38 @@ $$end
 // --------------------------------------------------
 
 $$if SIMULATION then
-$$dofile('simul_command_stream_1.lua')
+$$dofile('simul_cmd_queue.lua')
 unit simul_receiver(io_uart_in io)
 {
-  bram uint8 bytes[] = {$simul_command_stream$};
+  bram uint8 bytes[] = {$simul_cmd_queue$};
 
   io.data_out_ready := 0;
 
   algorithm <autorun> {
     uint24 next(0);
 
-    while (next != $6000*8$) {
+$$if not ICARUS then
+    while (next != $#simul_cmd_queue$) {
       uint8 wait = 1;
-      //__display("next: %d",next);
-      bytes.addr = next;
-      while (wait != 0) {
-        wait = wait + 1;
-      }
+      while (wait != 0) { wait = wait + 1; }
+$$else
+    while (next != 1024) {
+      uint4 wait = 1;
+      while (wait != 0) { wait = wait + 1; }
+$$end
+      // __display("[simul_cmd_queue] next: %d",next);
       io.data_out       = bytes.rdata;
       io.data_out_ready = 1;
-      next = next + 1;
+      next              = next + 1;
+      bytes.addr        = next;
     }
-    __finish();
+$$if ICARUS then
+    {
+      uint10 wait = 1;
+      while (wait != 0) { wait = wait + 1; }
+      __finish();
+    }
+$$end
   }
 }
 $$end
@@ -208,7 +216,7 @@ $$end
   DMC_1_gpu_standalone gpu(
     screen_ready <: screen_ctrl.ready,
     clock2x      <: clock2x,
-$$if MCH2022 then
+$$if MCH2022 or (SIMULATION and SIMUL_QPSRAM) then
     ram_clk  :> ram_clk,  ram_csn :>  ram_csn,
     ram_io0 <:> ram_io0,  ram_io1 <:> ram_io1,
     ram_io2 <:> ram_io2,  ram_io3 <:> ram_io3,
@@ -268,6 +276,8 @@ $$if SIMULATION then
   // for simulation, create dummy vars
   uint1 sf_csn(1); uint1 sf_clk(0); uint1 sf_io0(0);
   uint1 sf_io1(0); uint1 sf_io2(0); uint1 sf_io3(0);
+  uint1 ram_csn(1); uint1 ram_clk(0); uint1 ram_io0(0);
+  uint1 ram_io1(0); uint1 ram_io2(0); uint1 ram_io3(0);
 $$end
 
   // ==============================
@@ -366,6 +376,7 @@ $$end
     cmdq.in_next = gpu.ready & ~cmdq.empty;
 
 $$if SIMULATION then
+    // __display("[cmdq] full:%b empty:%b",cmdq.full,cmdq.empty);
     cycle = cycle + 1;
 $$end
 

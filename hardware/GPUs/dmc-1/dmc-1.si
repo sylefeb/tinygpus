@@ -447,7 +447,9 @@ $$end
       // terrain
       tcol_rdy           = 0; // next column height ready
       pickh_done         = 0; // picking done
-
+$$if SIMULATION then
+      //__display("[gpu::span_drawer] span %d->%d",col_start,col_end);
+$$end
     } else { // in_start -------------------------------
 
 			uint1 still_drawing  <:: terrain ? ~terrain_done
@@ -546,7 +548,7 @@ unit column_sender(
     // done when the full column is sent
     uint1 done     <:: (count == 8d$doomchip_height$);
     // send next while not done and screen ready
-    uint1 next     <:: ~done & screen_ready;
+    uint1 next     <:: ~done;
     // light level adjustment
     uint4  light   <:: colbufs.rdata0[ 8,4];
     uint10 ro      <:: palette.rdata[12,6] * light;
@@ -566,10 +568,16 @@ $$else
     screen_data   =  {g[0,3],b[1,5],r[1,5],g[3,3]};
 $$end
     // count sent pixels
-    count         = in_start ? 0 : (next ? count + 1 : count);
-    //if (next) {
-    //  __display("[colsender %d] [screen_valid] sending next (%d)",cycle,count);
-    //}
+    count         = in_start ? 0 : ((next & screen_ready) ? count + 1 : count);
+$$if SIMULATION then
+    if (in_start) {
+      //__write("\n");
+    }
+    if (next & screen_ready) {
+      //__write("%h",colbufs.rdata0[0,8]);
+      //__display("[gpu::column_sender] sending next (%d)",count);
+    }
+$$end
     // lookup next color in palette
     palette.addr  = colbufs.rdata0[0,8];
     // lookup next pixel in column buffer
