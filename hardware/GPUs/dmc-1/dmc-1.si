@@ -118,7 +118,7 @@ unit texture_sampler(
     uint11 modu       <:: ((1<<tex_wp2)-1);
     uint11 modv       <:: ((1<<tex_hp2)-1);
     // update binding (takes multiple cycles, continues while binding[0,1] == 1)
-    binding       = startbind ? 5b11111
+    binding       = reset ? 0 : startbind ? 5b11111
                               : (txm.data_available ? binding>>1 : binding);
     // memory trigger pulse high on access, and is maintained high while binding
     // (continuous read)            vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv last
@@ -568,9 +568,9 @@ $$else
     screen_data   =  {g[0,3],b[1,5],r[1,5],g[3,3]};
 $$end
     // count sent pixels
-    count         = in_start ? 0 : ((next & screen_ready) ? count + 1 : count);
+    count         = reset ? 8d$doomchip_height$ : in_start ? 0 : ((next & screen_ready) ? count + 1 : count);
     // lookup next color in palette
-    palette.addr  = colbufs.rdata0[0,8];
+    palette.addr  = reset ? 0 : colbufs.rdata0[0,8];
     // lookup next pixel in column buffer
     colbufs.addr0 = { buffer,count[0,$doomchip_height_p2$] };
   }
@@ -620,7 +620,7 @@ unit DMC_1_gpu(
     sender.in_start   = 0;
     drawer.in_start   = 0;
 
-    if (valid) {
+    if (valid & ~next_pending) {
 
       next_command = command;
       next_pending = 1;
