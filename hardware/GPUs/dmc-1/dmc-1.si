@@ -542,13 +542,10 @@ unit column_sender(
 ) {
   brom uint18 palette[256] = {$palette666$};
 
-  uint8  count(8d$doomchip_height$);
+  uint8  count(0);
+  uint1  done(0);
 
   always {
-    // done when the full column is sent
-    uint1 done     <:: (count == 8d$doomchip_height$);
-    // send next while not done and screen ready
-    uint1 next     <:: ~done;
     // light level adjustment
     uint4  light   <:: colbufs.rdata0[ 8,4];
     uint10 ro      <:: palette.rdata[12,6] * light;
@@ -558,17 +555,21 @@ unit column_sender(
     uint6  r       <:: ro >> 4;
     uint6  g       <:: go >> 4;
     uint6  b       <:: bo >> 4;
+    // done when we send the last
+    done          = in_start ? 0
+                  : (((count == 8d$doomchip_height$-1) & screen_ready) | done);
     // report busy while not done
     busy          = ~done;
     // pass data to screen driver
-    screen_valid  = next; // trigger screen sending on next
+    screen_valid  = ~done; // trigger screen sending
 $$if MCH2022 then
     screen_data   = ~{g[0,3],r[1,5],b[1,5],g[3,3]};
 $$else
     screen_data   =  {g[0,3],b[1,5],r[1,5],g[3,3]};
 $$end
     // count sent pixels
-    count         = reset ? 8d$doomchip_height$ : in_start ? 0 : ((next & screen_ready) ? count + 1 : count);
+    count         = reset    ? 8d$doomchip_height$
+                  : in_start ? 0 : ((~done & screen_ready) ? count + 1 : count);
     // lookup next color in palette
     palette.addr  = reset ? 0 : colbufs.rdata0[0,8];
     // lookup next pixel in column buffer
