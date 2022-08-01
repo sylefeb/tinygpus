@@ -12,6 +12,7 @@ ice40: dmc-1-standalone.si
 	--frameworks_dir $(SILICE_DIR)/../frameworks/ \
 	--framework $(SILICE_DIR)/../frameworks/boards/bare/bare.v \
 	-D ICE40=1 \
+	-D GPU_EXPORT=1 \
 	-C reg_init_zero=1 \
 	-D MCH2022=1
 	cp BUILD_export/dmc-1-gpu.v export/

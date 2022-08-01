@@ -7,7 +7,9 @@
 // | @sylefeb 2020-12-02                                                       |
 // |___________________________________________________________________________|
 // |                                                                           |
-// | TODO: nothing? I bet not :)                                               |
+// | TODO:                                                                     |
+// |  - first screen line seems incorrect on mch2022                           |
+// |  - RGB 5-6-5 needs to be revised and made consistent across versions      |
 // |                                                                           |
 // |___________________________________________________________________________|
 // |                                                                           |
@@ -562,10 +564,14 @@ unit column_sender(
     busy          = ~done;
     // pass data to screen driver
     screen_valid  = ~done; // trigger screen sending
+$$if GPU_EXPORT then
+    screen_data   =  {r[1,5],g[0,6],b[1,5]};
+$$else
 $$if MCH2022 then
     screen_data   = ~{g[0,3],r[1,5],b[1,5],g[3,3]};
 $$else
     screen_data   =  {g[0,3],b[1,5],r[1,5],g[3,3]};
+$$end
 $$end
     // count sent pixels
     count         = reset    ? 8d$doomchip_height$
