@@ -22,7 +22,7 @@
 
 unit screen_controller(
   input   uint1  valid,
-  output! uint1  ready,
+  output  uint1  ready,
   input   uint17 in_data,
   input   uint1  screen_ready, // NOTE: this controller expects sole control of
   output  uint1  screen_valid, //       the screen and never checks screen_ready
@@ -50,6 +50,17 @@ $$end
 
     screen_valid = 0; // maintain low
 
+    if (~wait[0,1]) {
+      // send the next byte
+      current_data = current_data >> 8;
+      current_cfg  = current_cfg  >> 2;
+      screen_valid = current_cfg [1,1]; // present?
+      wait         = current_cfg [1,1] ? 8b11111111 : 8b0;
+      twice        = twice >> 1;
+    } else {
+      // update waiting modulo
+      wait = wait >> 1;
+    }
     if (valid & ready) {
       current_data = in_data[0,16];
       current_cfg  = in_data[16,1] ? 4b1010 : {2b0,1b1,in_data[8,1]};
@@ -59,22 +70,11 @@ $$end
 $$if SIMULATION then
       //__display("[screen buffer %d] starting",cycle);
 $$end
-    } else {
-      if (~wait[0,1]) {
-        // send the next byte
-        current_data = current_data >> 8;
-        current_cfg  = current_cfg  >> 2;
-        screen_valid = current_cfg [1,1]; // present?
-        wait         = current_cfg [1,1] ? 8b11111111 : 8b0;
-        twice        = twice >> 1;
-      } else {
-        // update waiting modulo
-        wait = wait >> 1;
-      }
     }
     send_byte    =   current_data[0,8];
     send_dc      = ~ current_cfg [0,1]; // data or command
     ready        = ~ twice[0,1];        // ready when both sent
+
 $$if SIMULATION then
     if (screen_valid) {
       //__display("[screen buffer %d] sending next (ready:%b)",cycle,ready);

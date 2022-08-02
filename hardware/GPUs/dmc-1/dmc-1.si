@@ -376,7 +376,7 @@ $$end
       colbufs.addr1       = { buffer,pixcoord[0,$doomchip_height_p2$] };
       colbufs.wdata1      = { (light[4,1] ? 4b0 : light[0,4]) | (bkg ? 4d15 : 4d0),
                               sampler_io.texel };
-      colbufs.wenable1    = smplr_delay[$delay_bit$,1] & depth_ok & opaque;
+//      colbufs.wenable1    = smplr_delay[$delay_bit$,1] & depth_ok & opaque; ///////////////// TEST
       // ---- read/write to depth buffer
       depths.addr0        = pixcoord;
       depths.addr1        = pixcoord;
@@ -542,44 +542,87 @@ unit column_sender(
   output uint16              screen_data,
   output uint1               busy(1),
 ) {
-  brom uint18 palette[256] = {$palette666$};
-
-  uint8  count(0);
-  uint1  done(0);
+  brom uint18 palette[256] = //{$palette666$}; ////////////////////////////// TEST
+{
+$$for i=0,255 do
+  $i$,
+$$end
+};
+  uint8  count(/*8d$doomchip_height$*/ 4);
+  uint1  done(1);
+  //uint3  warmup(0);
 
   always {
     // light level adjustment
-    uint4  light   <:: colbufs.rdata0[ 8,4];
-    uint10 ro      <:: palette.rdata[12,6] * light;
-    uint10 go      <:: palette.rdata[ 6,6] * light;
-    uint10 bo      <:: palette.rdata[ 0,6] * light;
+    uint4  light   <: 15; // colbufs.rdata0[ 8,4]; /////////////////////// TEST
+    uint10 ro      <: palette.rdata[12,6] * light;
+    uint10 go      <: palette.rdata[ 6,6] * light;
+    uint10 bo      <: palette.rdata[ 0,6] * light;
     // final r,g,b values
-    uint6  r       <:: ro >> 4;
-    uint6  g       <:: go >> 4;
-    uint6  b       <:: bo >> 4;
+    uint6  r       <: ro >> 4;
+    uint6  g       <: go >> 4;
+    uint6  b       <: bo >> 4;
+
+    uint1 active(0);
+    uint1 started(0);
+
+    busy = ~done;
+
+    {      // stage 0
+      uint1 next <: screen_valid & screen_ready;
+      //         ^^ we immediately see the change to screen_valid in stage 2
+      uint1 done(0);
+
+      count         = in_start ? 0 : (next ? count + 1 : count);
+      done          = (count == /*8d$doomchip_height$*/4);
+      started       = in_start ? 1 : (done ? 0         : started);
+      colbufs.addr0 = { /*buffer*/1b0,count[0,$doomchip_height_p2$] };
+      ////////////////// ^^^^^^^^^^ ///////////////////// vvvvvv ///////////////// TEST
+    } -> { // stage 1
+      // lookup next color in palette
+      palette.addr  = colbufs.rdata0[0,8];
+    } -> { // stage 2
+      screen_valid  = started;
+$$if GPU_EXPORT then
+      screen_data   =  {r[1,5],g[0,6],b[1,5]};
+$$else
+$$if MCH2022 then
+      screen_data   = ~{g[0,3],r[1,5],b[1,5],g[3,3]};
+$$else
+      screen_data   =  palette.rdata; // {g[0,3],b[1,5],r[1,5],g[3,3]}; /////////////////// TEST
+$$end
+$$end
+    }
+
+
+$$if nil then
     // done when we send the last
     done          = in_start ? 0
-                  : (((count == 8d$doomchip_height$-1) & screen_ready) | done);
+                  : (((count == /*8d$doomchip_height$*/4-1) & screen_ready) | done);
+    warmup        = in_start ? 3b111 : (warmup>>1);
     // report busy while not done
     busy          = ~done;
     // pass data to screen driver
-    screen_valid  = ~done; // trigger screen sending
+    screen_valid  = ~done & ~warmup[1,1]; // trigger screen sending
 $$if GPU_EXPORT then
     screen_data   =  {r[1,5],g[0,6],b[1,5]};
 $$else
 $$if MCH2022 then
     screen_data   = ~{g[0,3],r[1,5],b[1,5],g[3,3]};
 $$else
-    screen_data   =  {g[0,3],b[1,5],r[1,5],g[3,3]};
+    screen_data   = palette.rdata; // {g[0,3],b[1,5],r[1,5],g[3,3]}; /////////////////// TEST
 $$end
 $$end
     // count sent pixels
-    count         = reset    ? 8d$doomchip_height$
-                  : in_start ? 0 : ((~done & screen_ready) ? count + 1 : count);
+    count         = reset    ? 0
+                  : in_start ? 0
+                  : ((~done & screen_ready & ~warmup[0,1]) ? count + 1 : count);
     // lookup next color in palette
-    palette.addr  = reset ? 0 : colbufs.rdata0[0,8];
+    palette.addr  = colbufs.rdata0[0,8];
     // lookup next pixel in column buffer
-    colbufs.addr0 = { buffer,count[0,$doomchip_height_p2$] };
+    colbufs.addr0 = { /*buffer*/1b0,count[0,$doomchip_height_p2$] };
+    ////////////////// ^^^^^^^^^^ ////////////////////////////////////////// TEST
+$$end
   }
 }
 
@@ -599,7 +642,15 @@ unit DMC_1_gpu(
   // column double buffers
   // - first  [0                    .. 2^doomchip_height_p2-1    ]
   // - second [2^doomchip_height_p2 .. 2^(doomchip_height_p2+1)-1]
-  simple_dualport_bram uint12 colbufs[$1<<(doomchip_height_p2+1)$] = uninitialized;
+  simple_dualport_bram uint12 colbufs[$1<<(doomchip_height_p2+1)$] // = uninitialized; //////// TEST
+  = {
+255,
+$$for i=1,238 do
+$i$,
+$$end
+127,
+pad(8haa)
+  };
   //                   ^^^^^^ { light , palette id }
 
   span_drawer drawer<reginputs>(

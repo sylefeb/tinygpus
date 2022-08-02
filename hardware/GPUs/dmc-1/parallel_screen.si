@@ -22,7 +22,7 @@
 
 unit screen_controller(
   input   uint1  valid,
-  output! uint1  ready,
+  output  uint1  ready,
   input   uint17 in_data,
   input   uint1  screen_ready,
   output  uint1  screen_valid,
@@ -54,18 +54,17 @@ $$end
 
 
     screen_valid   = 0; // maintain low
-    ready          = 1;
 
-    if (valid & ~working[0,1]) {
+    if (valid & ready) {
 $$if SIMULATION then
       //__display("[screen_controller %d] [screen_valid] sending",cycle);
 $$end
       ready = 0;
       if (screen_ready) {
-        // start sending immediatly if possible
+        // start sending immediately if possible
         send_byte      =   new_data[0,8]; // byte to be sent
         send_dc        = ~ new_cfg [0,1];  // data or command
-        screen_valid   =   screen_ready & new_cfg[1,1]; // present?
+        screen_valid   =   new_cfg [1,1]; // present?
         current_data   = new_data[8,8];
         current_cfg    = new_cfg [2,2];
         working        = 2b01;
@@ -86,7 +85,7 @@ $$end
         current_cfg  = current_cfg  >> 2;
         working      = working      >> 1;
       }
-      ready        = ~ working[0,1];
+      ready          = ~ working[0,1];
     }
 
 $$if SIMULATION then

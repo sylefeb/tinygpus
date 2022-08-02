@@ -10,7 +10,8 @@
 // |     the distribution, please refer to it for details.                     |
 // |___________________________________________________________________________|
 
-$$SIMUL_QPSRAM  = 1
+$$SIMUL_QPSRAM          = 1
+$$SIMUL_PARALLEL_SCREEN = 1
 
 $$uart_bauds    = 115200
 
@@ -42,7 +43,7 @@ $$end
 
 $include('../../GPUs/dmc-1/dmc-1-standalone.si')
 $include('../../GPUs/dmc-1/command_queue.si')
-$$if MCH2022 then
+$$if MCH2022 or (SIMULATION and SIMUL_PARALLEL_SCREEN) then
 $include('../../GPUs/dmc-1/parallel_screen.si')
 $$else
 $include('../../GPUs/dmc-1/spi_screen.si')
@@ -211,6 +212,22 @@ $$else
 {
 $$end
 
+$$if SIMULATION then
+  // for simulation, create dummy vars to receive inexisting bindings
+  // texture memory
+  uint1 sf_csn(1); uint1 sf_clk(0); uint1 sf_io0(0);
+  uint1 sf_io1(0); uint1 sf_io2(0); uint1 sf_io3(0);
+  uint1 ram_csn(1); uint1 ram_clk(0); uint1 ram_io0(0);
+  uint1 ram_io1(0); uint1 ram_io2(0); uint1 ram_io3(0);
+  // dummy vars for screen
+$$if ICARUS then
+  uint1 oled_clk(0); uint1 oled_mosi(0); uint1 oled_dc(0); uint1 oled_resn(0);
+  uint1 oled_csn(0);
+$$end
+  uint8 lcd_d(0); uint1 lcd_rs(0); uint1 lcd_wr_n(0); uint1 lcd_cs_n(0);
+  uint1 lcd_rst_n(1); uint1 lcd_mode(0); uint1 lcd_fmark(0);
+$$end
+
   // ==============================
   // GPU
   DMC_1_gpu_standalone gpu(
@@ -240,7 +257,7 @@ $$end
     send_byte    :> screen_send_byte,
   );
 
-$$if MCH2022 then
+$$if MCH2022 or (SIMULATION and SIMUL_PARALLEL_SCREEN) then
   screen_driver screen(
     ready            :> screen_ready,
     screen_d         :> lcd_d,
@@ -272,14 +289,6 @@ $$if not SIMULATION then
 $$end
 $$end
 
-$$if SIMULATION then
-  // for simulation, create dummy vars
-  uint1 sf_csn(1); uint1 sf_clk(0); uint1 sf_io0(0);
-  uint1 sf_io1(0); uint1 sf_io2(0); uint1 sf_io3(0);
-  uint1 ram_csn(1); uint1 ram_clk(0); uint1 ram_io0(0);
-  uint1 ram_io1(0); uint1 ram_io2(0); uint1 ram_io3(0);
-$$end
-
   // ==============================
   // UART
   uart_in  ui;
@@ -301,13 +310,6 @@ $$end
 
 $$if SIMULATION then
   uint32 cycle(0);
-$$if ICARUS then
-  uint1 oled_clk(0);
-  uint1 oled_mosi(0);
-  uint1 oled_dc(0);
-  uint1 oled_resn(0);
-  uint1 oled_csn(0);
-$$end
 $$end
 
   uint1  receiving(0);
