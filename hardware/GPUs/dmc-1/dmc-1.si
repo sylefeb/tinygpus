@@ -534,13 +534,13 @@ $include('../../../demos/build/palette666.si')
 // ___________________________________________________________________________
 // Column sender, sends a column through the screen interface
 unit column_sender(
-  input uint1                in_start(0), // pulse
-  input uint1                buffer,   // buffer to send (we have two)
+  input  uint1                in_start(0), // pulse
+  input  uint1                buffer,   // buffer to send (we have two)
   simple_dualport_bram_port0 colbufs,
-  input  uint1               screen_ready,
-  output uint1               screen_valid(0),
-  output uint16              screen_data,
-  output uint1               busy(1),
+  input   uint1               screen_ready,
+  output! uint1               screen_valid(0),
+  output! uint16              screen_data,
+  output  uint1               busy(1),
 ) {
   brom uint18 palette[256] = //{$palette666$}; ////////////////////////////// TEST
 {
@@ -565,8 +565,8 @@ $$end
 
     {      // stage 0
       count         = in_start ? 0 : ((hold | ~active) ? count : count + 1);
-      active        = in_start                                ? 1 // first
-                    : (count == /*8d$doomchip_height$*/4 + 1) ? 0 // done
+      active        = in_start                            ? 1 // first
+                    : (count == /*8d$doomchip_height$*/4) ? 0 // done
                     : active;
       colbufs.addr0 = { /*buffer*/1b0,count[0,$doomchip_height_p2$] };
       ////////////////// ^^^^^^^^^^ ///////////////////// vvvvvv ///////////////// TEST
@@ -578,9 +578,8 @@ $$end
       uint18 pal(0);
       screen_valid  = active;
       hold         ^= active & ~screen_ready;
-      pal           = hold ? pal : palette.rdata;
       busy          = active;
-      __display("count: %d",count);
+      pal           = hold ? pal : palette.rdata;
 $$if GPU_EXPORT then
       screen_data   =  pal; // screen_data   =  {r[1,5],g[0,6],b[1,5]};
 $$else
@@ -591,36 +590,6 @@ $$else
 $$end
 $$end
     }
-
-
-$$if nil then
-    // done when we send the last
-    done          = in_start ? 0
-                  : (((count == /*8d$doomchip_height$*/4-1) & screen_ready) | done);
-    warmup        = in_start ? 3b111 : (warmup>>1);
-    // report busy while not done
-    busy          = ~done;
-    // pass data to screen driver
-    screen_valid  = ~done & ~warmup[1,1]; // trigger screen sending
-$$if GPU_EXPORT then
-    screen_data   =  {r[1,5],g[0,6],b[1,5]};
-$$else
-$$if MCH2022 then
-    screen_data   = ~{g[0,3],r[1,5],b[1,5],g[3,3]};
-$$else
-    screen_data   = palette.rdata; // {g[0,3],b[1,5],r[1,5],g[3,3]}; /////////////////// TEST
-$$end
-$$end
-    // count sent pixels
-    count         = reset    ? 0
-                  : in_start ? 0
-                  : ((~done & screen_ready & ~warmup[0,1]) ? count + 1 : count);
-    // lookup next color in palette
-    palette.addr  = colbufs.rdata0[0,8];
-    // lookup next pixel in column buffer
-    colbufs.addr0 = { /*buffer*/1b0,count[0,$doomchip_height_p2$] };
-    ////////////////// ^^^^^^^^^^ ////////////////////////////////////////// TEST
-$$end
   }
 }
 
@@ -632,8 +601,8 @@ unit DMC_1_gpu(
   output  uint1       ready,
   input   uint64      command,
   input   uint1       screen_ready,
-  output  uint1       screen_valid(0),
-  output  uint16      screen_data,
+  output! uint1       screen_valid(0),
+  output! uint16      screen_data,
   output  uint8       pickedh,
   texmem_user         txm,
 ) {

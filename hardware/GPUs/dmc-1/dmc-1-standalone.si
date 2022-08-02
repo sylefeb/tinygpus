@@ -45,8 +45,8 @@ unit DMC_1_gpu_standalone(
   input   uint64  command,
   // screen interface
   input   uint1   screen_ready,
-  output  uint1   screen_valid(0),
-  output  uint16  screen_data,
+  output! uint1   screen_valid(0),
+  output! uint16  screen_data,
   // texture memory interface
   input   uint1   clock2x,
   output  uint1   ram_clk,
@@ -82,7 +82,7 @@ $$end
   // ==============================
   // GPU
   texmem_io     txm_io;
-  DMC_1_gpu gpu(txm          <:>  txm_io,
+  DMC_1_gpu gpu(txm <:> txm_io,
                 <:auto:>);
 
   always {
