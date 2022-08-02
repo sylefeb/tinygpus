@@ -548,9 +548,9 @@ $$for i=0,255 do
   $i$,
 $$end
 };
-  uint8  count(/*8d$doomchip_height$*/ 4);
-  uint1  done(1);
-  //uint3  warmup(0);
+  uint8 count(/*8d$doomchip_height$*/ 4);
+  uint1 done(1);
+  uint1 hold(0);
 
   always {
     // light level adjustment
@@ -563,33 +563,28 @@ $$end
     uint6  g       <: go >> 4;
     uint6  b       <: bo >> 4;
 
-    uint1 active(0);
-    uint1 started(0);
-
     busy = ~done;
 
     {      // stage 0
-      uint1 next <: screen_valid & screen_ready;
-      //         ^^ we immediately see the change to screen_valid in stage 2
-      uint1 done(0);
-
-      count         = in_start ? 0 : (next ? count + 1 : count);
-      done          = (count == /*8d$doomchip_height$*/4);
-      started       = in_start ? 1 : (done ? 0         : started);
+      count         = in_start ? 0 : ((hold | done) ? count : count + 1);
+      done          = in_start ? 0 : (count == /*8d$doomchip_height$*/ 4 + 1);
       colbufs.addr0 = { /*buffer*/1b0,count[0,$doomchip_height_p2$] };
       ////////////////// ^^^^^^^^^^ ///////////////////// vvvvvv ///////////////// TEST
     } -> { // stage 1
       // lookup next color in palette
-      palette.addr  = colbufs.rdata0[0,8];
+      palette.addr  = hold ? palette.addr : colbufs.rdata0[0,8];
     } -> { // stage 2
-      screen_valid  = started;
+      uint18 pal(0);
+      screen_valid  = ~done;
+      hold         ^= ~done & ~screen_ready;
+      pal           = hold ? pal : palette.rdata;
 $$if GPU_EXPORT then
-      screen_data   =  {r[1,5],g[0,6],b[1,5]};
+      screen_data   =  pal; // screen_data   =  {r[1,5],g[0,6],b[1,5]};
 $$else
 $$if MCH2022 then
       screen_data   = ~{g[0,3],r[1,5],b[1,5],g[3,3]};
 $$else
-      screen_data   =  palette.rdata; // {g[0,3],b[1,5],r[1,5],g[3,3]}; /////////////////// TEST
+      screen_data   =  pal; // {g[0,3],b[1,5],r[1,5],g[3,3]}; /////////////////// TEST
 $$end
 $$end
     }
