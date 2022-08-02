@@ -543,10 +543,17 @@ unit column_sender(
   output  uint1               busy(1),
 ) {
   brom uint18 palette[256] = {$palette666$};
+//  {
+$$for i=0,255 do
+//$i$,
+$$end
+//  };
 
-  uint8 count(8d$doomchip_height$);
-  uint1 active(0);
-  uint1 hold(0);
+  uint8  count(0);
+  uint1  active(0);
+  uint1  hold(0);
+  uint18 pal(0);
+  uint6  r(0);  uint6  g(0);  uint6  b(0);
 
   always {
     // light level adjustment
@@ -555,27 +562,25 @@ unit column_sender(
     {      // stage 0
       count         = in_start ? 0 : ((hold | ~active) ? count : count + 1);
       active        = in_start                       ? 1 // first
-                    : (count == 8d$doomchip_height$) ? 0 // done
+                    : (count == 8d$doomchip_height+1$) ? 0 // done
                     : active;
       colbufs.addr0 = { buffer, count[0,$doomchip_height_p2$] };
     } -> { // stage 1
       // lookup next color in palette
       light         = hold ? light        : colbufs.rdata0[8,4];
       palette.addr  = hold ? palette.addr : colbufs.rdata0[0,8];
-      active        = hold | active;
     } -> { // stage 2
-      uint18 pal(0);
       uint10 ro(0); uint10 go(0); uint10 bo(0);
-      uint6  r(0);  uint6  g(0);  uint6  b(0);
-
+      pal           = hold ? pal : palette.rdata;
+      active        = hold | active;
+      // final r,g,b values
+      ro = pal[12,6] * light; go = pal[ 6,6] * light; bo = pal[0,6] * light;
+      r  = ro >> 4; g  = go >> 4; b  = bo >> 4;
+    } -> { // stage 3
       screen_valid  = active;
       hold         ^= active & ~screen_ready;
       //          ^^^^ other stages see this immediately
       busy          = active;
-      pal           = hold ? pal : palette.rdata;
-      // final r,g,b values
-      ro = pal[12,6] * light; go = pal[ 6,6] * light; bo = pal[0,6] * light;
-      r  = ro >> 4; g  = go >> 4; b  = bo >> 4;
 $$if GPU_EXPORT then
       screen_data   =  {r[1,5],g[0,6],b[1,5]};
 $$else
@@ -607,6 +612,13 @@ unit DMC_1_gpu(
   // - second [2^doomchip_height_p2 .. 2^(doomchip_height_p2+1)-1]
   simple_dualport_bram uint12 colbufs[$1<<(doomchip_height_p2+1)$] = uninitialized;
   //                   ^^^^^^ { light , palette id }
+//  = {
+//255,
+$$for i=1,239 do
+//$i$,
+$$end
+//pad(0)
+//  };
 
   span_drawer drawer<reginputs>(
     colbufs   <:>  colbufs,
