@@ -376,7 +376,7 @@ $$end
       colbufs.addr1       = { buffer,pixcoord[0,$doomchip_height_p2$] };
       colbufs.wdata1      = { (light[4,1] ? 4b0 : light[0,4]) | (bkg ? 4d15 : 4d0),
                               sampler_io.texel };
-//      colbufs.wenable1    = smplr_delay[$delay_bit$,1] & depth_ok & opaque; ///////////////// TEST
+      colbufs.wenable1    = smplr_delay[$delay_bit$,1] & depth_ok & opaque;
       // ---- read/write to depth buffer
       depths.addr0        = pixcoord;
       depths.addr1        = pixcoord;
@@ -542,51 +542,47 @@ unit column_sender(
   output! uint16              screen_data,
   output  uint1               busy(1),
 ) {
-  brom uint18 palette[256] = //{$palette666$}; ////////////////////////////// TEST
-{
-$$for i=0,255 do
-  $i$,
-$$end
-};
-  uint8 count(/*8d$doomchip_height$*/ 4);
+  brom uint18 palette[256] = {$palette666$};
+
+  uint8 count(8d$doomchip_height$);
   uint1 active(0);
   uint1 hold(0);
 
   always {
     // light level adjustment
-    uint4  light   <: 15; // colbufs.rdata0[ 8,4]; /////////////////////// TEST
-    uint10 ro      <: palette.rdata[12,6] * light;
-    uint10 go      <: palette.rdata[ 6,6] * light;
-    uint10 bo      <: palette.rdata[ 0,6] * light;
-    // final r,g,b values
-    uint6  r       <: ro >> 4;
-    uint6  g       <: go >> 4;
-    uint6  b       <: bo >> 4;
+    uint4  light(0);
 
     {      // stage 0
       count         = in_start ? 0 : ((hold | ~active) ? count : count + 1);
-      active        = in_start                            ? 1 // first
-                    : (count == /*8d$doomchip_height$*/4) ? 0 // done
+      active        = in_start                       ? 1 // first
+                    : (count == 8d$doomchip_height$) ? 0 // done
                     : active;
-      colbufs.addr0 = { /*buffer*/1b0,count[0,$doomchip_height_p2$] };
-      ////////////////// ^^^^^^^^^^ ///////////////////// vvvvvv ///////////////// TEST
+      colbufs.addr0 = { buffer, count[0,$doomchip_height_p2$] };
     } -> { // stage 1
       // lookup next color in palette
+      light         = hold ? light        : colbufs.rdata0[8,4];
       palette.addr  = hold ? palette.addr : colbufs.rdata0[0,8];
       active        = hold | active;
     } -> { // stage 2
       uint18 pal(0);
+      uint10 ro(0); uint10 go(0); uint10 bo(0);
+      uint6  r(0);  uint6  g(0);  uint6  b(0);
+
       screen_valid  = active;
       hold         ^= active & ~screen_ready;
+      //          ^^^^ other stages see this immediately
       busy          = active;
       pal           = hold ? pal : palette.rdata;
+      // final r,g,b values
+      ro = pal[12,6] * light; go = pal[ 6,6] * light; bo = pal[0,6] * light;
+      r  = ro >> 4; g  = go >> 4; b  = bo >> 4;
 $$if GPU_EXPORT then
-      screen_data   =  pal; // screen_data   =  {r[1,5],g[0,6],b[1,5]};
+      screen_data   =  {r[1,5],g[0,6],b[1,5]};
 $$else
 $$if MCH2022 then
       screen_data   = ~{g[0,3],r[1,5],b[1,5],g[3,3]};
 $$else
-      screen_data   =  pal; // {g[0,3],b[1,5],r[1,5],g[3,3]}; /////////////////// TEST
+      screen_data   =  {g[0,3],b[1,5],r[1,5],g[3,3]};
 $$end
 $$end
     }
@@ -609,15 +605,7 @@ unit DMC_1_gpu(
   // column double buffers
   // - first  [0                    .. 2^doomchip_height_p2-1    ]
   // - second [2^doomchip_height_p2 .. 2^(doomchip_height_p2+1)-1]
-  simple_dualport_bram uint12 colbufs[$1<<(doomchip_height_p2+1)$] // = uninitialized; //////// TEST
-  = {
-255,
-$$for i=1,238 do
-$i$,
-$$end
-127,
-pad(8haa)
-  };
+  simple_dualport_bram uint12 colbufs[$1<<(doomchip_height_p2+1)$] = uninitialized;
   //                   ^^^^^^ { light , palette id }
 
   span_drawer drawer<reginputs>(

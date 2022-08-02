@@ -11,7 +11,7 @@
 // |___________________________________________________________________________|
 
 $$SIMUL_QPSRAM          = 1
-$$SIMUL_PARALLEL_SCREEN = 1
+$$SIMUL_PARALLEL_SCREEN = nil
 
 $$uart_bauds    = 115200
 

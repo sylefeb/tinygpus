@@ -77,7 +77,7 @@ $$end
 
 $$if SIMULATION then
     if (screen_valid) {
-      //__display("[screen buffer %d] sending next (ready:%b)",cycle,ready);
+      //__display("[screen buffer %d] sending next (byte:%x ready:%b)",send_byte,cycle,ready);
     }
     cycle = cycle + 1;
 $$end
