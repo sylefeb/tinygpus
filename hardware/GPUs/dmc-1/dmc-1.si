@@ -549,7 +549,7 @@ $$for i=0,255 do
 $$end
 };
   uint8 count(/*8d$doomchip_height$*/ 4);
-  uint1 done(1);
+  uint1 active(0);
   uint1 hold(0);
 
   always {
@@ -563,21 +563,24 @@ $$end
     uint6  g       <: go >> 4;
     uint6  b       <: bo >> 4;
 
-    busy = ~done;
-
     {      // stage 0
-      count         = in_start ? 0 : ((hold | done) ? count : count + 1);
-      done          = in_start ? 0 : (count == /*8d$doomchip_height$*/ 4 + 1);
+      count         = in_start ? 0 : ((hold | ~active) ? count : count + 1);
+      active        = in_start                                ? 1 // first
+                    : (count == /*8d$doomchip_height$*/4 + 1) ? 0 // done
+                    : active;
       colbufs.addr0 = { /*buffer*/1b0,count[0,$doomchip_height_p2$] };
       ////////////////// ^^^^^^^^^^ ///////////////////// vvvvvv ///////////////// TEST
     } -> { // stage 1
       // lookup next color in palette
       palette.addr  = hold ? palette.addr : colbufs.rdata0[0,8];
+      active        = hold | active;
     } -> { // stage 2
       uint18 pal(0);
-      screen_valid  = ~done;
-      hold         ^= ~done & ~screen_ready;
+      screen_valid  = active;
+      hold         ^= active & ~screen_ready;
       pal           = hold ? pal : palette.rdata;
+      busy          = active;
+      __display("count: %d",count);
 $$if GPU_EXPORT then
       screen_data   =  pal; // screen_data   =  {r[1,5],g[0,6],b[1,5]};
 $$else
