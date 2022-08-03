@@ -11,7 +11,7 @@
 // |___________________________________________________________________________|
 
 $$SIMUL_QPSRAM          = 1
-$$SIMUL_PARALLEL_SCREEN = 1
+$$SIMUL_PARALLEL_SCREEN = nil -- use nil for visual display in simulation
 
 $$uart_bauds    = 115200
 
@@ -85,12 +85,12 @@ unit simul_receiver(io_uart_in io)
     uint24 next(0);
 
 $$if not ICARUS then
-    while (next != $#simul_cmd_queue$) {
+    while (next != $#simul_cmd_queue-1$) {
       uint8 wait = 1;
       while (wait != 0) { wait = wait + 1; }
 $$else
     while (next != 1024) {
-      uint4 wait = 1;
+      uint8 wait = 1;
       while (wait != 0) { wait = wait + 1; }
 $$end
       // __display("[simul_cmd_queue] next: %d",next);

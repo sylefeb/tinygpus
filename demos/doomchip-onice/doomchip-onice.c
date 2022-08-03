@@ -926,12 +926,12 @@ static inline void draw_columns()
 
           // floor or terrain?
           if (bspSectors[sec].f_T) {
-            // floor with flat texturing
+            // floor with planar texturing
             int is_terrain = bspSectors[sec].f_T == TERRAIN_ID;
             if (!is_terrain) {
               col_send(
                 COLDRAW_PLANE_B(-sec_f_h,btm-(doomchip_height>>1)),
-                COLDRAW_COL(bspSectors[sec].f_T,btm,f_h, seclight) | PLANE
+                COLDRAW_COL(bspSectors[sec].f_T, btm,f_h, seclight) | PLANE
               );
             } else {
               // trace terrain
@@ -942,10 +942,11 @@ static inline void draw_columns()
             }
           }
           btm       = f_h;
-          // ceiling with flat texturing
+
+          // ceiling with planar texturing
           col_send(
             COLDRAW_PLANE_B( sec_c_h,c_h-(doomchip_height>>1)),
-            COLDRAW_COL(bspSectors[sec].c_T,c_h,top, seclight) | PLANE
+            COLDRAW_COL(bspSectors[sec].c_T, c_h,top, seclight) | PLANE
           );
           top       = c_h;
 
@@ -956,29 +957,29 @@ static inline void draw_columns()
             int is_terrain = bspSegs[seg].lwr == TERRAIN_ID;
             int sec_f_o    = bspSectors[other].f_h - view_z;
             int f_o        = to_h(sec_f_o,invd);
-            if (btm > f_o) {
-              f_o = btm;
-            } else if (top < f_o) {
-              f_o = top;
+            if (btm < f_o) {   // the lower wall is visible
+              if (top < f_o) { // clip to top
+                f_o = top;
+              }
+              if (!is_terrain) {
+                  col_send(
+                    COLDRAW_WALL(y,tex_v_f,tc_u),
+                    COLDRAW_COL(bspSegs[seg].lwr, btm,f_o, seclight) | WALL
+                  );
+              } else if (hit_dist > prev_dist) {
+                // trace terrain
+                terrain(view_x,view_y,view_z,
+                        prev_x,prev_y,prev_dist,
+                        hit_x,hit_y,((2<<12)-1),
+                        btm,f_o, c);
+                // background filler
+                col_send(
+                  COLDRAW_WALL(Y_MAX,0,0),
+                  COLDRAW_COL(0, btm,f_o, 15) | WALL
+                );
+              }
+              btm            = f_o;
             }
-            if (!is_terrain) {
-              col_send(
-                COLDRAW_WALL(y,tex_v_f,tc_u),
-                COLDRAW_COL(bspSegs[seg].lwr,btm,f_o, seclight) | WALL
-              );
-            } else if (hit_dist > prev_dist) {
-              // trace terrain
-              terrain(view_x,view_y,view_z,
-                      prev_x,prev_y,prev_dist,
-                      hit_x,hit_y,((2<<12)-1),
-                      btm,f_o, c);
-              // background filler
-              col_send(
-                COLDRAW_WALL(Y_MAX,0,0),
-                COLDRAW_COL(0, btm,f_o, 15) | WALL
-              );
-            }
-            btm            = f_o;
           }
 
           // process pending column commands
@@ -990,31 +991,30 @@ static inline void draw_columns()
             int sec_c_o    = bspSectors[other].c_h - view_z;
             int c_o        = to_h(sec_c_o,invd);
             int tex_v      = 0;
-            if (btm > c_o) {
-              tex_v   = mul((btm - c_o),y) >> DEPTH_SHIFT;
-              c_o     = btm;
-            } else if (top < c_o) {
-              tex_v   = mul((c_o - top),y) >> DEPTH_SHIFT;
-              c_o     = top;
+            if (top > c_o) {    // the upper wall is visible
+              if (btm > c_o) {  // clip to bottom
+                tex_v   = mul((btm - c_o),y) >> DEPTH_SHIFT;
+                c_o     = btm;
+              }
+              if (!is_terrain) {
+                col_send(
+                  COLDRAW_WALL(y,tex_v,tc_u),
+                  COLDRAW_COL(bspSegs[seg].upr, c_o,top, seclight) | WALL
+                );
+              } else if (hit_dist > prev_dist) {
+                // trace terrain
+                terrain(view_x,view_y,view_z,
+                        prev_x,prev_y,prev_dist,
+                        hit_x,hit_y,((2<<12)-1),
+                        c_o,top, c);
+                // background filler
+                col_send(
+                  COLDRAW_WALL(Y_MAX,0,0),
+                  COLDRAW_COL(0, c_o,top, 15) | WALL
+                );
+              }
+              top            = c_o;
             }
-            if (!is_terrain) {
-              col_send(
-                COLDRAW_WALL(y,tex_v,tc_u),
-                COLDRAW_COL(bspSegs[seg].upr, c_o,top, seclight) | WALL
-              );
-            } else if (hit_dist > prev_dist) {
-              // trace terrain
-              terrain(view_x,view_y,view_z,
-                      prev_x,prev_y,prev_dist,
-                      hit_x,hit_y,((2<<12)-1),
-                      c_o,top, c);
-              // background filler
-              col_send(
-                COLDRAW_WALL(Y_MAX,0,0),
-                COLDRAW_COL(0, c_o,top, 15) | WALL
-              );
-            }
-            top            = c_o;
           }
 
           // middle wall
@@ -1106,10 +1106,10 @@ void main_0()
   // --------------------------
   // intialize view and frame
   // --------------------------
-  view_x   = player_start_x;
-  view_y   = player_start_y;
+  view_x   = 864; //player_start_x;
+  view_y   = -3328; //player_start_y;
   view_z   = 30; //40;
-  view_a   = player_start_a + 128;
+  view_a   = 0; //player_start_a + 128;
   frame    = 0;
   rand     = 3137;
 #ifdef SPRITES
@@ -1128,24 +1128,24 @@ void main_0()
   while (1) {
 
 		{ // get frustum
-		int angle = view_a;
-		sinview   = sin_m[ angle         & 4095];
-		cosview   = sin_m[(angle + 1024) & 4095];
-		angle     = view_a + col_to_alpha[0];
-		sinleft   = sin_m[ angle         & 4095];
-		cosleft   = sin_m[(angle + 1024) & 4095];
-		angle     = view_a + col_to_alpha[doomchip_width-1];
-		sinright  = sin_m[ angle         & 4095];
-		cosright  = sin_m[(angle + 1024) & 4095];
+      int angle = view_a;
+      sinview   = sin_m[ angle         & 4095];
+      cosview   = sin_m[(angle + 1024) & 4095];
+      angle     = view_a + col_to_alpha[0];
+      sinleft   = sin_m[ angle         & 4095];
+      cosleft   = sin_m[(angle + 1024) & 4095];
+      angle     = view_a + col_to_alpha[doomchip_width-1];
+      sinright  = sin_m[ angle         & 4095];
+      cosright  = sin_m[(angle + 1024) & 4095];
 		}
 
 		{ // adjust view altitude
-		int player_sec = find_sector(view_x,view_y);
-		if (bspSectors[player_sec].f_T != TERRAIN_ID) {
-			view_z    = bspSectors[player_sec].f_h + 30;
-		} else {
-			view_z    = terrainh() - terrain_z_offset + 30;
-		}
+      int player_sec = find_sector(view_x,view_y);
+      if (bspSectors[player_sec].f_T != TERRAIN_ID) {
+        view_z    = bspSectors[player_sec].f_h + 30;
+      } else {
+        view_z    = terrainh() - terrain_z_offset + 30;
+      }
 		}
 
     // reset vis segments
@@ -1194,7 +1194,7 @@ void main_0()
       view_y += sinview>>8;
     }
 
-//#ifdef SIMULATION
+#if 1
     // random walk around
     if ((frame&63) < 40) {
       if (((frame>>6)&1) == 0) {
@@ -1205,7 +1205,7 @@ void main_0()
     }
     view_x += cosview>>8;
     view_y += sinview>>8;
-//#endif
+#endif
 
     // uncollide
     struct p2d pos = collision(view_x,view_y,40);
@@ -1230,4 +1230,4 @@ void main()
 	}
 }
 
-// -----------------------------------------------------
+// -----------------------------------------------------1

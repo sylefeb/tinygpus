@@ -589,13 +589,6 @@ $$else
       screen_data   =  {g[0,3],b[1,5],r[1,5],g[3,3]};
 $$end
 $$end
-$$if SIMULATION then
-      { // count pixels sent to screen
-        uint8 sent(0);
-        if (active & screen_ready) { __display("[read] [%d]=%x (%x,%x,%x,%d)",sent,pal,r,g,b,light); }
-        sent = in_start ? 0 : ((active & screen_ready) ? sent+1 : (sent));
-      }
-$$end
     }
   }
 }

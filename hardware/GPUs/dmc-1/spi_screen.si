@@ -68,7 +68,7 @@ $$end
       wait         = 8b11111111;
       twice        = 2b11;
 $$if SIMULATION then
-      //__display("[screen buffer %d] starting",cycle);
+      //__display("[screen_controller %d] starting, data = %x",cycle,current_data);
 $$end
     }
     send_byte    =   current_data[0,8];
@@ -76,9 +76,9 @@ $$end
     ready        = ~ twice[0,1];        // ready when both sent
 
 $$if SIMULATION then
-    if (screen_valid) {
-      //__display("[screen buffer %d] sending next (byte:%x ready:%b)",send_byte,cycle,ready);
-    }
+    //if (screen_valid) {
+    //  __display("[screen_controller %d] sending next (byte:%x ready:%b)",cycle,send_byte,ready);
+    //}
     cycle = cycle + 1;
 $$end
   }
