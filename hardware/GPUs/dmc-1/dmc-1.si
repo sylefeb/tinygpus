@@ -561,7 +561,8 @@ $$end
 
     {      // stage 0
       count         = in_start ? 0 : ((hold | ~active) ? count : count + 1);
-      active        = in_start                       ? 1 // first
+      //                                      ^^^^^^ not necessary, helps debug
+      active        = in_start                               ? 1 // first
                     : (count == 8d$doomchip_height+1$) ? 0 // done
                     : active;
       colbufs.addr0 = { buffer, count[0,$doomchip_height_p2$] };
