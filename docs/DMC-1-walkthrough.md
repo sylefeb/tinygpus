@@ -17,85 +17,87 @@ The SOC instantiates six major components:
 - The CPU RAM, using the UP5K on-chip 128KB SPRAM
 
 <!-- MARKDOWN-AUTO-DOCS:START (CODE:src=../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si&syntax=c&lines=206-211) -->
-<!-- The below code snippet is automatically added from ../hardware/GPUs/dmc-1/dmc-1.si -->
+<!-- The below code snippet is automatically added from ../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si -->
 ```c
-  // draw command type
-  uint1  wall     <:: in_command[30,2] == 2b00;   // wall?
-  uint1  plane    <:: in_command[30,2] == 2b01;   // plane? (perspective span)
-  uint1  terrain  <:: in_command[30,2] == 2b10;   // terrain?
-  uint1  param    <:: in_command[30,2] == 2b11;   // parameter?
-  // on a param decode which data is sent
+  // ==============================
+  // RAM for CPU (SPRAM)
+  bram_port_io mem;
+  bram_spram_32bits bram_ram(
+    pram               <:> mem
+  );
 ```
 <!-- MARKDOWN-AUTO-DOCS:END -->
 
 - The CPU ([my ice-v-dual CPU](https://github.com/sylefeb/Silice/blob/master/projects/ice-v/README.md))
 
 <!-- MARKDOWN-AUTO-DOCS:START (CODE:src=../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si&syntax=c&lines=213-219) -->
-<!-- The below code snippet is automatically added from ../hardware/GPUs/dmc-1/dmc-1.si -->
+<!-- The below code snippet is automatically added from ../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si -->
 ```c
-  uint1  planeA   <:: param & (in_command[62,2] == 2b10);
-  uint1  uv_offs  <:: param & (in_command[62,2] == 2b01);
-  uint1  set_vwz  <:: param & (in_command[62,2] == 2b11);
-  // other
-  uint1  pickh    <:: terrain & in_command[63,1]; // pick terrain height?
-
-  // ---- drawing status
+  // ==============================
+  // CPU
+  uint32 user_data(0);
+  rv32i_cpu cpu(
+    user_data        <:: user_data,
+    mem              <:> mem,
+  );
 ```
 <!-- MARKDOWN-AUTO-DOCS:END -->
 
 - The GPU (!)
 
 <!-- MARKDOWN-AUTO-DOCS:START (CODE:src=../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si&syntax=c&lines=221-225) -->
-<!-- The below code snippet is automatically added from ../hardware/GPUs/dmc-1/dmc-1.si -->
+<!-- The below code snippet is automatically added from ../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si -->
 ```c
-  uint8  current(0);     // current y pos along span
-  uint8  end    (0);     // ending y value
-  uint1  pickh_done(0);  // picking done
-  uint1  current_done <:: (current >= end); // column end reached
+  // ==============================
+  // GPU
+  texmem_io     txm_io;
+  DMC_1_gpu gpu(txm          <:>  txm_io,
+                screen_ready <:   screen_ctrl.ready);
 ```
 <!-- MARKDOWN-AUTO-DOCS:END -->
 
 - The GPU texture memory
 
 <!-- MARKDOWN-AUTO-DOCS:START (CODE:src=../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si&syntax=c&lines=271-278) -->
-<!-- The below code snippet is automatically added from ../hardware/GPUs/dmc-1/dmc-1.si -->
+<!-- The below code snippet is automatically added from ../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si -->
 ```c
-  // rotating bit vector implementing the per-pixel cycle, such that
-  // the pixel computation is done when the MSB is 1
-  uint$delay_bit+1$ smplr_delay(0);
-  uint1  start(0);     // start fetching a span
-  uint3  skip(0);      // do not increment along span and disable pixel writes
-
-  // take into account the various delays for texel fetch
-  // - LSB are most delayed
+  // ==============================
+  // texture memory
+$if MCH2022 or (SIMULATION and SIMUL_QPSRAM) then
+    qpsram_ram txm<@clock2x,!rst2x,reginputs> (
+      ram_clk  :> ram_clk,  ram_csn :>  ram_csn,
+      ram_io0 <:> ram_io0,  ram_io1 <:> ram_io1,
+      ram_io2 <:> ram_io2,  ram_io3 <:> ram_io3,
+    );
 ```
 <!-- MARKDOWN-AUTO-DOCS:END -->
 
 - The GPU command queue
 
 <!-- MARKDOWN-AUTO-DOCS:START (CODE:src=../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si&syntax=c&lines=320-322) -->
-<!-- The below code snippet is automatically added from ../hardware/GPUs/dmc-1/dmc-1.si -->
+<!-- The below code snippet is automatically added from ../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si -->
 ```c
-    // (sampler works in parallel)
-    switch ({terrain,state})
-    {
+  // ==============================
+  // command queue
+  command_queue cmdq(current :> gpu.command);
 ```
 <!-- MARKDOWN-AUTO-DOCS:END -->
 
 - The screen controller and screen driver
 
 <!-- MARKDOWN-AUTO-DOCS:START (CODE:src=../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si&syntax=c&lines=227-237) -->
-<!-- The below code snippet is automatically added from ../hardware/GPUs/dmc-1/dmc-1.si -->
+<!-- The below code snippet is automatically added from ../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si -->
 ```c
-  int24  dot_u(0);
-  int24  dot_v(0);
-  int24  dot_ray(0);
-  int24  ded(0);
-  int10  ny_inc(0);
-  int10  uy_inc(0);
-  int10  vy_inc(0);
-  int32  ray_t(0);
-  int24  u_offset(0);
-  int24  v_offset(0);
+  // ==============================
+  // screen display
+  uint1 screen_valid(0);    uint1 screen_ready(0);
+  uint1 screen_send_dc(0);  uint8 screen_send_byte(0);
+  screen_controller screen_ctrl(
+    screen_valid :> screen_valid,
+    screen_ready <: screen_ready,
+    send_dc      :> screen_send_dc,
+    send_byte    :> screen_send_byte,
+  );
+  // ...
 ```
 <!-- MARKDOWN-AUTO-DOCS:END -->
