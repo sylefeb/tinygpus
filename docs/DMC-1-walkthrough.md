@@ -61,7 +61,6 @@ The SOC instantiates six major components:
 <!-- MARKDOWN-AUTO-DOCS:START (CODE:src=../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si&syntax=c&lines=272-278) -->
 <!-- The below code snippet is automatically added from ../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si -->
 ```c
-  // ==============================
   // texture memory
 $if MCH2022 or (SIMULATION and SIMUL_QPSRAM) then
     qpsram_ram txm<@clock2x,!rst2x,reginputs> (
