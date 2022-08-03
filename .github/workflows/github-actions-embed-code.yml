@@ -12,4 +12,4 @@ jobs:
         - name: Markdown autodocs
           uses: dineshsonachalam/markdown-autodocs@v1.0.4
           with:
-            output_file_paths: '[./README.md]'
+            output_file_paths: '[./docs/DMC-1-walkthrough.md]'
