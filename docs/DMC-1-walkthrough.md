@@ -16,7 +16,7 @@ The SOC instantiates six major components:
 
 - The CPU RAM, using the UP5K on-chip 128KB SPRAM
 
-<!-- MARKDOWN-AUTO-DOCS:START (CODE:src=../hardware/GPUs/dmc-1/dmc-1.si&syntax=c&lines=206-211) -->
+<!-- MARKDOWN-AUTO-DOCS:START (CODE:src=../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si&syntax=c&lines=206-211) -->
 <!-- The below code snippet is automatically added from ../hardware/GPUs/dmc-1/dmc-1.si -->
 ```c
   // draw command type
@@ -30,7 +30,7 @@ The SOC instantiates six major components:
 
 - The CPU ([my ice-v-dual CPU](https://github.com/sylefeb/Silice/blob/master/projects/ice-v/README.md))
 
-<!-- MARKDOWN-AUTO-DOCS:START (CODE:src=../hardware/GPUs/dmc-1/dmc-1.si&syntax=c&lines=213-219) -->
+<!-- MARKDOWN-AUTO-DOCS:START (CODE:src=../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si&syntax=c&lines=213-219) -->
 <!-- The below code snippet is automatically added from ../hardware/GPUs/dmc-1/dmc-1.si -->
 ```c
   uint1  planeA   <:: param & (in_command[62,2] == 2b10);
@@ -45,7 +45,7 @@ The SOC instantiates six major components:
 
 - The GPU (!)
 
-<!-- MARKDOWN-AUTO-DOCS:START (CODE:src=../hardware/GPUs/dmc-1/dmc-1.si&syntax=c&lines=221-225) -->
+<!-- MARKDOWN-AUTO-DOCS:START (CODE:src=../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si&syntax=c&lines=221-225) -->
 <!-- The below code snippet is automatically added from ../hardware/GPUs/dmc-1/dmc-1.si -->
 ```c
   uint8  current(0);     // current y pos along span
@@ -57,7 +57,7 @@ The SOC instantiates six major components:
 
 - The GPU texture memory
 
-<!-- MARKDOWN-AUTO-DOCS:START (CODE:src=../hardware/GPUs/dmc-1/dmc-1.si&syntax=c&lines=271-278) -->
+<!-- MARKDOWN-AUTO-DOCS:START (CODE:src=../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si&syntax=c&lines=271-278) -->
 <!-- The below code snippet is automatically added from ../hardware/GPUs/dmc-1/dmc-1.si -->
 ```c
   // rotating bit vector implementing the per-pixel cycle, such that
@@ -73,7 +73,7 @@ The SOC instantiates six major components:
 
 - The GPU command queue
 
-<!-- MARKDOWN-AUTO-DOCS:START (CODE:src=../hardware/GPUs/dmc-1/dmc-1.si&syntax=c&lines=320-322) -->
+<!-- MARKDOWN-AUTO-DOCS:START (CODE:src=../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si&syntax=c&lines=320-322) -->
 <!-- The below code snippet is automatically added from ../hardware/GPUs/dmc-1/dmc-1.si -->
 ```c
     // (sampler works in parallel)
@@ -84,7 +84,7 @@ The SOC instantiates six major components:
 
 - The screen controller and screen driver
 
-<!-- MARKDOWN-AUTO-DOCS:START (CODE:src=../hardware/GPUs/dmc-1/dmc-1.si&syntax=c&lines=227-237) -->
+<!-- MARKDOWN-AUTO-DOCS:START (CODE:src=../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si&syntax=c&lines=227-237) -->
 <!-- The below code snippet is automatically added from ../hardware/GPUs/dmc-1/dmc-1.si -->
 ```c
   int24  dot_u(0);
