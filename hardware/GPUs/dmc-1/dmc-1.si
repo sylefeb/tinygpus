@@ -543,11 +543,6 @@ unit column_sender(
   output  uint1               busy(1),
 ) {
   brom uint18 palette[256] = {$palette666$};
-//  {
-$$for i=0,255 do
-//$i$,
-$$end
-//  };
 
   uint8  count(0);
   uint1  active(0);
@@ -571,9 +566,12 @@ $$end
       light         = hold ? light        : colbufs.rdata0[8,4];
       palette.addr  = hold ? palette.addr : colbufs.rdata0[0,8];
     } -> { // stage 2
+      uint4 prev_light(0);
       uint10 ro(0); uint10 go(0); uint10 bo(0);
-      pal           = hold ? pal : palette.rdata;
+      pal           = hold ? pal        : palette.rdata;
+      light         = hold ? prev_light : light;
       active        = hold | active;
+      prev_light    = light;
       // final r,g,b values
       ro = pal[12,6] * light; go = pal[ 6,6] * light; bo = pal[0,6] * light;
       r  = ro >> 4; g  = go >> 4; b  = bo >> 4;
@@ -590,6 +588,13 @@ $$if MCH2022 then
 $$else
       screen_data   =  {g[0,3],b[1,5],r[1,5],g[3,3]};
 $$end
+$$end
+$$if SIMULATION then
+      { // count pixels sent to screen
+        uint8 sent(0);
+        if (active & screen_ready) { __display("[read] [%d]=%x (%x,%x,%x,%d)",sent,pal,r,g,b,light); }
+        sent = in_start ? 0 : ((active & screen_ready) ? sent+1 : (sent));
+      }
 $$end
     }
   }
@@ -613,13 +618,6 @@ unit DMC_1_gpu(
   // - second [2^doomchip_height_p2 .. 2^(doomchip_height_p2+1)-1]
   simple_dualport_bram uint12 colbufs[$1<<(doomchip_height_p2+1)$] = uninitialized;
   //                   ^^^^^^ { light , palette id }
-//  = {
-//255,
-$$for i=1,239 do
-//$i$,
-$$end
-//pad(0)
-//  };
 
   span_drawer drawer<reginputs>(
     colbufs   <:>  colbufs,
