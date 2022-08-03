@@ -204,13 +204,14 @@ $$else
 $$end
 
   // ==============================
-  // cpu
+  // RAM for CPU (SPRAM)
   bram_port_io mem;
-
   bram_spram_32bits bram_ram(
     pram               <:> mem
   );
 
+  // ==============================
+  // CPU
   uint32 user_data(0);
   rv32i_cpu cpu(
     user_data        <:: user_data,
@@ -225,16 +226,15 @@ $$end
 
   // ==============================
   // screen display
-  uint1 screen_valid(0);
-  uint1 screen_ready(0);
-  uint1 screen_send_dc(0);
-  uint8 screen_send_byte(0);
+  uint1 screen_valid(0);    uint1 screen_ready(0);
+  uint1 screen_send_dc(0);  uint8 screen_send_byte(0);
   screen_controller screen_ctrl(
     screen_valid :> screen_valid,
     screen_ready <: screen_ready,
     send_dc      :> screen_send_dc,
     send_byte    :> screen_send_byte,
   );
+  // ...
 
 $$if MCH2022 then
   screen_driver screen(
@@ -319,7 +319,6 @@ $$end
 
   // ==============================
   // command queue
-
   command_queue cmdq(current :> gpu.command);
 
   // ==============================
