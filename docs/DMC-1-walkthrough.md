@@ -16,30 +16,30 @@ The SOC instantiates six major components:
 
 - The CPU RAM, using the UP5K on-chip 128KB SPRAM
 
-<!-- MARKDOWN-AUTO-DOCS:START (CODE:src=./tutorial/t2.si&syntax=c&lines=206-211) -->
+<!-- MARKDOWN-AUTO-DOCS:START (CODE:src=../hardware/GPUs/dmc-1/dmc-1.si&syntax=c&lines=206-211) -->
 <!-- MARKDOWN-AUTO-DOCS:END -->
 
 - The CPU ([my ice-v-dual CPU](https://github.com/sylefeb/Silice/blob/master/projects/ice-v/README.md))
 
-<!-- MARKDOWN-AUTO-DOCS:START (CODE:src=./tutorial/t2.si&syntax=c&lines=213-219) -->
+<!-- MARKDOWN-AUTO-DOCS:START (CODE:src=../hardware/GPUs/dmc-1/dmc-1.si&syntax=c&lines=213-219) -->
 <!-- MARKDOWN-AUTO-DOCS:END -->
 
 - The GPU (!)
 
-<!-- MARKDOWN-AUTO-DOCS:START (CODE:src=./tutorial/t2.si&syntax=c&lines=221-225) -->
+<!-- MARKDOWN-AUTO-DOCS:START (CODE:src=../hardware/GPUs/dmc-1/dmc-1.si&syntax=c&lines=221-225) -->
 <!-- MARKDOWN-AUTO-DOCS:END -->
 
 - The GPU texture memory
 
-<!-- MARKDOWN-AUTO-DOCS:START (CODE:src=./tutorial/t2.si&syntax=c&lines=271-278) -->
+<!-- MARKDOWN-AUTO-DOCS:START (CODE:src=../hardware/GPUs/dmc-1/dmc-1.si&syntax=c&lines=271-278) -->
 <!-- MARKDOWN-AUTO-DOCS:END -->
 
 - The GPU command queue
 
-<!-- MARKDOWN-AUTO-DOCS:START (CODE:src=./tutorial/t2.si&syntax=c&lines=320-322) -->
+<!-- MARKDOWN-AUTO-DOCS:START (CODE:src=../hardware/GPUs/dmc-1/dmc-1.si&syntax=c&lines=320-322) -->
 <!-- MARKDOWN-AUTO-DOCS:END -->
 
 - The screen controller and screen driver
 
-<!-- MARKDOWN-AUTO-DOCS:START (CODE:src=./tutorial/t2.si&syntax=c&lines=227-237) -->
+<!-- MARKDOWN-AUTO-DOCS:START (CODE:src=../hardware/GPUs/dmc-1/dmc-1.si&syntax=c&lines=227-237) -->
 <!-- MARKDOWN-AUTO-DOCS:END -->
