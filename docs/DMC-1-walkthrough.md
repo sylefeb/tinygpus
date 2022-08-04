@@ -121,6 +121,17 @@ and copies the code to run from *flash memory* (more on that later) to the large
 SPRAM, then the CPU jumps to this code.
 This is done in [boot.c](../software/boot/boot.c):
 <!-- MARKDOWN-AUTO-DOCS:START (CODE:src=../software/boot/boot.c&syntax=c&lines=32-39) -->
+<!-- The below code snippet is automatically added from ../software/boot/boot.c -->
+```c
+  // copy to the start of the memory segment
+  unsigned char *code = (unsigned char *)0x0000004;
+  spiflash_copy(PAYLOAD_OFFSET/*offset*/,code,131088/*SPRAM size*/);
+  //                                          ^^^^^^ max code image size
+  // jump!
+  *LEDS = 15;
+  synch =  1; // sync with other core
+  asm volatile ("li t0,4; jalr x0,0(t0);");
+```
 <!-- MARKDOWN-AUTO-DOCS:END -->
 
 This boot code is compiled and stored in the initialized BRAM, that's how
@@ -151,10 +162,26 @@ very simple mechanism:
 First, note that the CPU is bound to a `texmem_io` group called `texio`:
 
 <!-- MARKDOWN-AUTO-DOCS:START (CODE:src=../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si&syntax=c&lines=221-225) -->
+<!-- The below code snippet is automatically added from ../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si -->
+```c
+  // ==============================
+  // GPU
+  texmem_io     txm_io;
+  DMC_1_gpu gpu(txm          <:>  txm_io,
+                screen_ready <:   screen_ctrl.ready);
+```
 <!-- MARKDOWN-AUTO-DOCS:END -->
 
 These variables are updated in the always block:
 <!-- MARKDOWN-AUTO-DOCS:START (CODE:src=../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si&syntax=c&lines=344-348) -->
+<!-- The below code snippet is automatically added from ../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si -->
+```c
+    // track texture memory interface
+    txm.in_ready            = txm_io.in_ready;
+    txm.addr                = txm_io.addr;
+    txm_io.data             = txm.rdata;
+    txm_io.busy             = txm.busy;
+```
 <!-- MARKDOWN-AUTO-DOCS:END -->
 As you can see, this connects `texio` to `txm` which is the flash memory unit itself:
 `qpsram_ram txm...` (on mch2022) or `spiflash_rom_core` (on icebreaker).
@@ -162,6 +189,14 @@ As you can see, this connects `texio` to `txm` which is the flash memory unit it
 To access flash the CPU first uses memory mapping to set an address and start a
 read:
 <!-- MARKDOWN-AUTO-DOCS:START (CODE:src=../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si&syntax=c&lines=404-408) -->
+<!-- The below code snippet is automatically added from ../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si -->
+```c
+            case 2b10: { // texture memory CPU write
+              txm.addr     = prev_mem_wdata[0,24];
+              txm.in_ready = 1; // NOTE: we assume there cannot be collisions
+                               // with the texture sampler ; CPU should not
+                               // drive the texture while draw calls are pending
+```
 <!-- MARKDOWN-AUTO-DOCS:END -->
 The read byte and the bit indicating the memory controller is busy are given to the
 CPU through its `user_data` registry (32 bits), that the RISC-V code can use to wait for
@@ -181,6 +216,20 @@ intercepting memory addresses that are outside the range of the actual available
 memory. Because each command is 64 bits, this takes two memory writes:
 
 <!-- MARKDOWN-AUTO-DOCS:START (CODE:src=../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si&syntax=c&lines=413-423) -->
+<!-- The below code snippet is automatically added from ../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si -->
+```c
+        case 4b0001: { // GPU commands
+          if (prev_mem_addr[0,1]) {
+            // received first half
+            cmdq.in_command[32,32] = prev_mem_wdata[0,32];
+          } else {
+            // received second half
+            cmdq.in_command[ 0,32] = prev_mem_wdata[0,32];
+            // store in fifo
+            cmdq.in_add = 1;
+          }
+        }
+```
 <!-- MARKDOWN-AUTO-DOCS:END -->
 
 The `case 4b0001:` is part of a `switch` performed on accessed memory addresses,
@@ -188,6 +237,11 @@ when a high bit of the address is set (well outside the truly available
 memory space):
 
 <!-- MARKDOWN-AUTO-DOCS:START (CODE:src=../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si&syntax=c&lines=371-372) -->
+<!-- The below code snippet is automatically added from ../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si -->
+```c
+    if ((prev_mem_wenable != 0) & prev_mem_addr[16,1]) {
+      switch (prev_mem_addr[2,4]) {
+```
 <!-- MARKDOWN-AUTO-DOCS:END -->
 
 The command queue is a FIFO data structure that records the commands.
@@ -204,6 +258,12 @@ the FIFO will overflow and bad things happen (typically, the GPU hangs).
 
 We send the next command to the GPU with these two lines:
 <!-- MARKDOWN-AUTO-DOCS:START (CODE:src=../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si&syntax=c&lines=428-430) -->
+<!-- The below code snippet is automatically added from ../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si -->
+```c
+    // send next command to GPU
+    gpu.valid    = gpu.ready & ~cmdq.empty;
+    cmdq.in_next = gpu.ready & ~cmdq.empty;
+```
 <!-- MARKDOWN-AUTO-DOCS:END -->
 
 The first line pulses `gpu.valid` to tell the GPU to process the command, while
@@ -211,6 +271,12 @@ The first line pulses `gpu.valid` to tell the GPU to process the command, while
 itself is given to the GPU through a binding:
 
 <!-- MARKDOWN-AUTO-DOCS:START (CODE:src=../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si&syntax=c&lines=320-322) -->
+<!-- The below code snippet is automatically added from ../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si -->
+```c
+  // ==============================
+  // command queue
+  command_queue cmdq(current :> gpu.command);
+```
 <!-- MARKDOWN-AUTO-DOCS:END -->
 
 The GPU is driving the screen directly, with the CPU only having access during
@@ -218,12 +284,25 @@ initialization (a similar situation than with the flash memory). This can be
 seen in particular in this part of the SOC:
 
 <!-- MARKDOWN-AUTO-DOCS:START (CODE:src=../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si&syntax=c&lines=356-359) -->
+<!-- The below code snippet is automatically added from ../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si -->
+```c
+    // screen interface
+    screen_ctrl   .valid    = gpu.screen_valid;
+    screen_ctrl   .in_data  = gpu.screen_valid
+                            ? {1b1,gpu.screen_data} : prev_mem_wdata[0,17];
+```
 <!-- MARKDOWN-AUTO-DOCS:END -->
 
 Note that `screen_ctrl.in_data` receives data either from the GPU
 or the CPU. The CPU can trigger `screen_ctrl.valid` through a memory mapped address:
 
 <!-- MARKDOWN-AUTO-DOCS:START (CODE:src=../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si&syntax=c&lines=394-396) -->
+<!-- The below code snippet is automatically added from ../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si -->
+```c
+            case 2b01: { // screen write from CPU
+              screen_ctrl.valid = 1;
+            }
+```
 <!-- MARKDOWN-AUTO-DOCS:END -->
 
 The screen controller unit `screen_ctrl` then drives a lower level screen driver
