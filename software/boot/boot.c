@@ -35,7 +35,7 @@ void main_load_code()
   //                                          ^^^^^^ max code image size
   // jump!
   *LEDS = 15;
-  synch = 1;
+  synch =  1; // sync with other core
   asm volatile ("li t0,4; jalr x0,0(t0);");
 }
 

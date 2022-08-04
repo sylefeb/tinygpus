@@ -57,7 +57,7 @@ $$ICEV_MULDIV        = 1
 $$ICEV_FAST_SHIFT    = 1
 $$ICEV_USERDATA      = 1
 $$ICEV_ALU_LATCH     = 1
-$$Boot               = (1<<17)>>2
+$$Boot               = (1<<17)>>2  -- boot from BRAM, see bram_spram_32bits.si
 $$addrW              = 17
 //_                    ^^ 2^17 (128K) + 1 bit for BRAM + 1 bit for mapping
 //_                    divided by 4 as we address 32 bits words
@@ -341,36 +341,36 @@ $$end
                       ~cmdq.full
                       };
 
-    // texture memory interface
+    // track texture memory interface
     txm.in_ready            = txm_io.in_ready;
     txm.addr                = txm_io.addr;
     txm_io.data             = txm.rdata;
     txm_io.busy             = txm.busy;
 $$if MCH2022 then
-    txm.wenable             = 0;
+    txm.wenable             = 0; // we never write to PSRAM
 $$end
-
+    // GPU commands
     gpu           .valid    = 0;
     cmdq          .in_add   = 0;
     cmdq          .in_next  = 0;
+    // screen interface
     screen_ctrl   .valid    = gpu.screen_valid;
     screen_ctrl   .in_data  = gpu.screen_valid
                             ? {1b1,gpu.screen_data} : prev_mem_wdata[0,17];
     screen.valid            = screen_valid;
     screen.data_or_command  = screen_send_dc;
     screen.byte             = screen_send_byte;
-
+    // uart: maintain low, pulse on send
     uo.data_in_ready = 0;
 
 $$if MCH2022 then
-    lcd_cs_n  = 0;
-    lcd_rst_n = 1;
+    lcd_cs_n  = 0; lcd_rst_n = 1; // maintain chip select and reset for screen
 $$end
 
     // memory mapping
     if ((prev_mem_wenable != 0) & prev_mem_addr[16,1]) {
       switch (prev_mem_addr[2,4]) {
-        case 4b0100: {
+        case 4b0100: { // write a char from CPU (printf)
           // UART
           uo.data_in       = prev_mem_wdata[ 0,8];
           uo.data_in_ready = ~uo.busy;
@@ -380,29 +380,28 @@ $$end
         }
         case 4b0010: {
           switch (prev_mem_addr[0,2]) {
-            case 2b00: {
+            case 2b00: { // LEDs from CPU
+              leds = prev_mem_wdata[0,8];
 $$if SIMULATION then
+              // in simulation we use LEDs to track cycle usage and print
+              // the number of cycles elapsed since the CPU last wrote to LEDs
               __display("(cycle %d) LEDs = %d | %d [elapsed %d]",iter,
                 prev_mem_wdata[0,32],__signed( prev_mem_wdata),iter-last_iter);
               last_iter = iter;
               if (prev_mem_wdata == 32hffffffff) { __finish(); }
 $$end
-              leds = prev_mem_wdata[0,8];
             }
-            case 2b01: {
-              // SPIscreen
+            case 2b01: { // screen write from CPU
               screen_ctrl.valid = 1;
             }
-            case 2b11: {
-              // SPIscreen reset
+            case 2b11: { // screen reset from CPU
 $$if VERILATOR then
               oled_resn = ~ prev_mem_wdata[0,1];
 $$elseif not MCH2022 then
               o_resn    = ~ prev_mem_wdata[0,1];
 $$end
             }
-            case 2b10: {
-              // texture memory
+            case 2b10: { // texture memory CPU write
               txm.addr     = prev_mem_wdata[0,24];
               txm.in_ready = 1; // NOTE: we assume there cannot be collisions
                                // with the texture sampler ; CPU should not
@@ -411,7 +410,7 @@ $$end
             default: { }
           }
         }
-        case 4b0001: {
+        case 4b0001: { // GPU commands
           if (prev_mem_addr[0,1]) {
             // received first half
             cmdq.in_command[32,32] = prev_mem_wdata[0,32];
@@ -426,11 +425,11 @@ $$end
       }
     }
 
-    // send next command to GPU?
+    // send next command to GPU
     gpu.valid    = gpu.ready & ~cmdq.empty;
     cmdq.in_next = gpu.ready & ~cmdq.empty;
 
-    // we can take one cycle to refresh the mappings, no need to pressure fmax
+    // refresh memory mappings with a one cycle latency to not pressure fmax
     prev_mem_addr    = mem.addr;
     prev_mem_wenable = mem.wenable;
     prev_mem_wdata   = mem.wdata;

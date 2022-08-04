@@ -39,7 +39,11 @@ There are three main demos: `terrain`, `tetrahedron` and `doomchip-onice`.
 All can be simulated, and currently run on the [mch2022 badge](https://www.bodge.team/docs/badges/mch2022/) and the [icebreaker](https://1bitsquared.com/products/icebreaker) with a SPI screen plugged in the PMOD 1A connector (details below).
 
 <table align="center"><tr>
-<td><img src="docs/terrain.png" width="200px"></td> <td><img src="docs/tetrahedron.png" width="200px"></td> <td><img src="docs/doomchip-onice.png" width="200px"></td>
+<td><img src="docs/terrain.png"        width="160px"></td>
+<td><img src="docs/tetrahedron.png"    width="160px"></td>
+<td><img src="docs/doomchip-onice.png" width="160px"></td>
+<td><img src="docs/interleaved.png"    width="160px"></td>
+<td><img src="docs/triangles.png"      width="160px"></td>
 </tr></table>
 
 The demos are running both on the `icebreaker` board and the `MCH2022` badge.
@@ -135,15 +139,17 @@ The `DMC-1` is my take on this. Thinking beyond Doom, I thought I should also su
 - Adding a terrain to Doom sounds like a huge thing.
 - If I was to create a GPU for Doom, it better should come with a killer feature.
 
-In terms of resources, I decided to primarily target the Lattice ice40 UP5K. First, this is the platform used by [the incredible source port on custom SOC by Sylvain Munaut](https://www.youtube.com/watch?v=3ZBAZ5QoCAk). Targeting anything bigger would have seemed too easy. Second, the UP5K is fairly slow (validating timing at 25 MHz is good, anything above is *very* good), and has 'only' 5K LUTs (that's not so small though, [1K LUTs can run a full 32 bits RISCV dual-core processor!](https://github.com/sylefeb/Silice/blob/master/projects/ice-v/IceVDual.md)). So this makes for a good challenge. On the upside, the UP5K has 8 DSPs (great for fast multipliers!) and 128KB of SPRAM, a fast one-cycle read/write memory. So this gives hope something can actually be achieved. Plus of course, the SPIflash ROM that is typically hooked alongside FPGAs for their configuration. These are to be considered read only (writing is very, very slow), and while reading takes multiple cycles to initialize a random access, performance is far from terrible.
+In terms of resources, I decided to primarily target the Lattice ice40 UP5K. First, this is the platform used by [the incredible source port on custom SOC by Sylvain Munaut](https://www.youtube.com/watch?v=3ZBAZ5QoCAk). Targeting anything bigger would have seemed too easy. Second, the UP5K is fairly slow (validating timing at 25 MHz is good, anything above is *very* good), and has 'only' 5K LUTs (that's not so small though, [1K LUTs can run a full 32 bits RISCV dual-core processor!](https://github.com/sylefeb/Silice/blob/master/projects/ice-v/IceVDual.md)). So this makes for a good challenge. On the upside, the UP5K has 8 DSPs (great for fast multipliers!) and 128KB of SPRAM, a fast one-cycle read/write memory. So this gives hope something can actually be achieved. Plus, a SPIflash memory is typically hooked alongside FPGAs for its configuration. A SPIflash is to be considered read only for our purpose (because writing is very, very slow), but even though reading takes multiple cycles to initialize a random access, performance is far from terrible. And that's  great, because SPIflash memories are typically a few MB and we need to put our large textures somewhere!
 
 At this point, you might want to watch [my video on the Doomchip on-ice](https://youtu.be/2ZAIIDXoBis), [browse the slides here](https://www.antexel.com/doomchip_onice_rc3/) or read the [detailed design walkthrough](docs/DMC-1-walkthrough.md). This explains how the initial design of the `DMC-1` was achieved, including perspective correct texturing for walls and flats (floors and ceilings) as well as the terrain rendering.
+
+You can also checkout the design walkthrough in [this separate page](./docs/DMC-1-walkthrough.md).
 
 ### On perspective correct texturing
 
 An interesting capability of the DMC-1 is that it can achieve perspective correct texturing on arbitrary slanted surfaces, such as in the tetrahedron demo.
 
-The reason this is interesting is because most games of the era (1) where limiting perspective correct texturing to special cases. Consider this screenshot of E1M1:
+The reason this is interesting is because most games of the era(1) where limiting perspective correct texturing to special cases. Consider this screenshot of E1M1:
 
 <center><img src="docs/doomchip-onice.png" width="400px"/></center>
 
@@ -207,7 +213,7 @@ I prepared a walkthrough of the [Silice](https://github.com/sylefeb/Silice) desi
 
 ### Discussion
 
-The `DMC-1` is unusual in that it renders the screen column by column, in order. This specific choice is motivated by the fact that we stream pixels to a SPI screen that features a framebuffer, so we do not have to spend precious memory on a framebuffer FPGA-side. Also, this allows the use of a one column depth buffer, a luxury enabling simpler drawing of scenes containing both the terrain, buildings and sprites.
+The `DMC-1` is unusual in that it renders the screen column by column, in order. This specific choice is motivated by the fact that we stream pixels to a small LCD/OLED screen that typically features a framebuffer, so we do not have to spend precious memory on a framebuffer FPGA-side. Also, this allows the use of a one column depth buffer, a luxury enabling simpler drawing of scenes containing both the terrain, buildings and sprites.
 
 This however imposes a specific draw order CPU side which is not always comfortable. That is why a second tinyGPU, using a different approach and likely an additional (writable) external memory is planned ;)
 

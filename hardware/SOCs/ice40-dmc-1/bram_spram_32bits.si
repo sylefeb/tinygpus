@@ -40,14 +40,14 @@ $$end
 
 $$config['bram_wmask_byte_wenable_width'] = 'data'
 
-algorithm bram_spram_32bits(
+unit bram_spram_32bits(
   bram_port_io pram {
     input   addr,
     input   wenable,
     input   wdata,
     output! rdata
   }, // provided ram interface
-) <autorun> {
+) {
 
   bram uint32 mem<"bram_wmask_byte">[$bram_size$] = { file("build/code.img"), pad(uninitialized) };
 
