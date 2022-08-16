@@ -93,8 +93,9 @@ static inline void transform(int *x, int *y, int *z,int w)
 // draws all screen columns
 static inline void render_frame()
 {
-  trsf_surface tsrfs[8];
-	rconvex      rtris[8];
+  trsf_surface      tsrfs[8];
+	rconvex           rtris[8];
+  rconvex_texturing rtexs[8];
 
   for (int tet = 0; tet < 2 ; ++tet) {
     // animation angle
@@ -108,7 +109,9 @@ static inline void render_frame()
     const int *idx =  indices;
     for (int s = (tet<<2) ; s < (tet<<2)+4 ; ++ s) {
       // transform the textured surfaces for rendering at this frame
-      surface_transform(&srfs[s-(tet<<2)], &tsrfs[s], transform, points);
+      surface_transform(&srfs[s-(tet<<2)], &tsrfs[s], transform);
+      // prepare texturing
+      rconvex_texturing_pre(&tsrfs[s], transform, points + *idx, &rtexs[s]);
       // prepare triangle rasterization
       rconvex_init(&rtris[s], 3,idx, prj_points + (tet<<2));
       idx += 3;
@@ -125,7 +128,7 @@ static inline void render_frame()
       const int *idx =  indices;
       for (int s = tet<<2 ; s < (tet<<2) + 4 ; ++ s) {
 
-        if (c >= rtris[s].x && c <= rtris[s].last_x && tsrfs[s].ded > 0) {
+        if (c >= rtris[s].x && c <= rtris[s].last_x && rtexs[s].ded > 0) {
 
           rconvex_step(&rtris[s],  3,idx, prj_points + (tet<<2));
 
@@ -134,7 +137,7 @@ static inline void render_frame()
           int ry = rtris[s].ys - SCREEN_HEIGHT/2;
 
           if (s != bound_s) {
-            surface_bind    (&tsrfs[s]);
+            rconvex_texturing_bind(&rtexs[s]);
             bound_s = s;
           }
 
@@ -143,7 +146,7 @@ static inline void render_frame()
 
           int dr = surface_setup_span(&tsrfs[s], rx,ry,rz);
           col_send(
-            COLDRAW_PLANE_B(tsrfs[s].ded,dr),
+            COLDRAW_PLANE_B(rtexs[s].ded,dr),
             COLDRAW_COL(tet == 0 ? 125 : 71 /*texture id*/, rtris[s].ys,rtris[s].ye, light) | PLANE
           );
 

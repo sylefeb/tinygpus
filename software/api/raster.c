@@ -284,7 +284,6 @@ static inline int rconvex_step(
 // for a texturing plane
 
 typedef struct {
-  int p0;
   int nx,ny,nz;
   int ux,uy,uz;
   int vx,vy,vz;
@@ -294,9 +293,12 @@ typedef struct {
   int nx,ny,nz;
   int ux,uy,uz;
   int vx,vy,vz;
+} trsf_surface;
+
+typedef struct {
   int u_offs,v_offs;
   int ded;
-} trsf_surface;
+} rconvex_texturing;
 
 typedef int          int32_t;
 typedef unsigned int uint32_t;
@@ -354,10 +356,9 @@ static inline void normalize(int *x, int *y, int *z)
 }
 
 // ____________________________________________________________________________
-// Prepares a surface
+// Prepares a surface from a triangle
 static inline void surface_pre(surface *s,int p0,int p1,int p2,const p3d *pts)
 {
-  s->p0 = p0;
   // compute triangle normal
   int d10x = pts[p1].x - pts[p0].x;
   int d10y = pts[p1].y - pts[p0].y;
@@ -381,7 +382,7 @@ typedef void (*f_transform)(int *x,int *y,int *z,int w);
 // ____________________________________________________________________________
 // Transform a surface with the current transform and view distance
 static inline void surface_transform(const surface *s,trsf_surface *ts,
-                                     f_transform trsf,const p3d *points)
+                                     f_transform trsf)
 {
   ts->nx = s->nx; ts->ny = s->ny; ts->nz = s->nz;
   ts->ux = s->ux; ts->uy = s->uy; ts->uz = s->uz;
@@ -390,29 +391,38 @@ static inline void surface_transform(const surface *s,trsf_surface *ts,
   trsf(&ts->nx,&ts->ny,&ts->nz,0);
   trsf(&ts->ux,&ts->uy,&ts->uz,0);
   trsf(&ts->vx,&ts->vy,&ts->vz,0);
-  // transform p0 (reference point for the surface)
-  p3d p0       = points[s->p0];
-  trsf(&p0.x,&p0.y,&p0.z,1);
+}
+
+// ____________________________________________________________________________
+// Prepares texturing info for a rconvex
+
+static inline void rconvex_texturing_pre(
+                                     const trsf_surface *ts, f_transform trsf,
+                                     const p3d *p0, rconvex_texturing *rtex)
+{
+  // transform p0 (reference point for the transformed surface)
+  p3d trp0     = *p0;
+  trsf(&trp0.x,&trp0.y,&trp0.z,1);
   // uv translation: translate so that p0 uv coordinates remain (0,0)
-  ts->u_offs   = dot3( p0.x,p0.y,p0.z, ts->ux,ts->uy,ts->uz );
-  ts->v_offs   = dot3( p0.x,p0.y,p0.z, ts->vx,ts->vy,ts->vz );
+  rtex->u_offs   = dot3( trp0.x,trp0.y,trp0.z, ts->ux,ts->uy,ts->uz );
+  rtex->v_offs   = dot3( trp0.x,trp0.y,trp0.z, ts->vx,ts->vy,ts->vz );
   // plane distance
-  ts->ded      = dot3( p0.x,p0.y,p0.z, ts->nx,ts->ny,ts->nz ) >> 8;
+  rtex->ded      = dot3( trp0.x,trp0.y,trp0.z, ts->nx,ts->ny,ts->nz ) >> 8;
   // NOTE: ded < 0 ==> backface surface
-  if (ts->ded > 0) {
-    ts->u_offs = - ts->u_offs;
-    ts->v_offs = - ts->v_offs;
+  if (rtex->ded > 0) {
+    rtex->u_offs = - rtex->u_offs;
+    rtex->v_offs = - rtex->v_offs;
   }
 }
 
 // ____________________________________________________________________________
 // Binds the surface for rendering (sets UV parameters)
-static inline void surface_bind(trsf_surface *s)
+static inline void rconvex_texturing_bind(const rconvex_texturing *rtex)
 {
 #ifndef EMUL
   col_send(
-    PARAMETER_UV_OFFSET(s->v_offs),
-    PARAMETER_UV_OFFSET_EX(s->u_offs) | PARAMETER
+    PARAMETER_UV_OFFSET(rtex->v_offs),
+    PARAMETER_UV_OFFSET_EX(rtex->u_offs) | PARAMETER
   );
 #endif
 }

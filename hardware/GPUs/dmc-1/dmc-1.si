@@ -166,7 +166,7 @@ unit texture_sampler(
 
 bitfield depth {
   uint1  b, // buffer used when depth was filled
-  uint15 d  // depth
+  uint31 d  // depth
 }
 
 // ___________________________________________________________________________
@@ -188,7 +188,7 @@ $$terrain_step = 2048
   texture_sampler sampler(txm <:> txm, smplr <:> sampler_io);
 
   // BRAM for single column depth buffer
-  simple_dualport_bram uint16 depths[$doomchip_height$] = uninitialized;
+  simple_dualport_bram uint32 depths[$doomchip_height$] = uninitialized;
 
   // BRAM for 1/y table
   bram uint16 inv_y[2048] = {
@@ -294,15 +294,16 @@ $$end
   always {
     // ---- depth buffer
     // depth test
-    uint15 dist    <:: (terrain ? {3b0,tcol_dist[8,12]} : 15b0)
-                     | (plane   ?          ray_t[2,15]  : 15b0)
-                     | (wall    ? {{2{in_command[47,1]}},in_command[35,13]} : 15b0);
+    uint31 dist    <:: (terrain ?  {12b0,tcol_dist[5,19]} : 31b0)
+                     | (plane   ?       {ray_t[0,30],1b0} : 31b0)
+                     | (wall    ? {{15{in_command[47,1]}},in_command[32,16]} : 31b0);
     //                             ^^^^^^^^^^^ ensures max is behing anything
     uint1 depth_ok <::    (depth(depths.rdata0).b ^ buffer)
     //                                              ^^^^^ ignore prev. frame
                         | (dist < depth(depths.rdata0).d);
     // darkening with distance
-    uint4  obscure_dist <:: dist[7,4];
+    uint4  obscure_dist <:: (|dist[14,17]) ? 15 : dist[10,4];
+    //                       ^^^^^^^^^^^ beyond lowest level
     uint4  obscure_clmp <:: obscure_dist > 10 ? 10 : obscure_dist;
     int5   light        <:: (__signed({1b0,in_command[26,4]})
                            - __signed({1b0,obscure_clmp[0,4]}));
@@ -450,7 +451,7 @@ $$end
       tcol_rdy           = 0; // next column height ready
       pickh_done         = 0; // picking done
 $$if SIMULATION then
-      //__display("[gpu::span_drawer] span %d->%d",col_start,col_end);
+      __display("[gpu::span_drawer] span %d->%d",col_start,col_end);
 $$end
     } else { // in_start -------------------------------
 

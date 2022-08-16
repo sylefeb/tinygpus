@@ -108,8 +108,10 @@ int     span_alloc;
 #define N_TRIS 48
 // transformed and projected points
 p3d     prj_points[N_PTS];
-// transformed texture surfaces (one per triangle)
-trsf_surface tsrf[N_TRIS];
+// transformed texture surface
+trsf_surface tsrf;
+// texturing info (one per triangle)
+rconvex_texturing rtexs[N_TRIS];
 
 // -----------------------------------------------------
 
@@ -125,6 +127,9 @@ static inline void render_frame()
   unsigned int tm_1 = time();
 #endif
 
+  // prepare the surface (we reuse the same for all)
+  surface_transform(&srf, &tsrf, transform);
+
   for (int t = 0; t < N_TRIS ; ++t) {
     // animation
     tr_angle         = (frame << 7) + (t << 9);
@@ -137,8 +142,8 @@ static inline void render_frame()
       transform(&p.x,&p.y,&p.z,1);
       project(&p, &prj_points[i]);
     }
-    // prepare the surface
-    surface_transform(&srf, &tsrf[t], transform, points);
+    // prepare texturing info
+    rconvex_texturing_pre(&tsrf,transform,points,&rtexs[t]);
     // rasterize triangle into spans
     rconvex rtri;
     rconvex_init(&rtri, 3,indices, prj_points);
@@ -183,15 +188,15 @@ static inline void render_frame()
       unsigned int tm_ss = time();
 #endif
       // bind the surface to the rasterizer
-      surface_bind(&tsrf[span->id]);
+      rconvex_texturing_bind(&rtexs[span->id]);
       // setup the surface span parameters
-      int dr = surface_setup_span(&tsrf[span->id], rx,ry,rz);
+      int dr = surface_setup_span(&tsrf, rx,ry,rz);
 #ifdef DEBUG
       tm_srfspan += time() - tm_ss;
 #endif
       // column drawing
       col_send(
-        COLDRAW_PLANE_B(tsrf[span->id].ded,dr),
+        COLDRAW_PLANE_B(rtexs[span->id].ded,dr),
         COLDRAW_COL(100 + span->id /*texture id*/, span->ys,span->ye,
                     15 /*light*/) | PLANE
       );
