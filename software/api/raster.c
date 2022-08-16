@@ -192,7 +192,7 @@ static inline int prev(int i,int N) {
 }
 
 // ____________________________________________________________________________
-static inline void rconvex_raster_start(
+static inline void rconvex_init(
   rconvex *t, int nindices, const int *indices, const p3d *pts
 ) {
   // find leftmost points
@@ -229,54 +229,44 @@ static inline void rconvex_raster_start(
 }
 
 // ____________________________________________________________________________
-static inline void rconvex_init(
-    rconvex *t,
-    int nindices,const int *indices,
-    const p3d *pts)
-{
-  rconvex_raster_start(t,nindices,indices,pts);
-}
-
-// ____________________________________________________________________________
 static inline int rconvex_step(
-  rconvex *t,int nindices, const int *indices, const p3d *pts)
+  rconvex *t, int nindices, const int *indices, const p3d *pts)
 {
-	t->ys = t->edge_top.y >> 16;
-	t->ye = t->edge_btm.y >> 16;
+  t->ys = t->edge_top.y >> 16;
+  t->ye = t->edge_btm.y >> 16;
   // clamp y (assumes triangle is not out-of-screen)
-  if      (t->ye > SCREEN_HEIGHT-1) t->ye = SCREEN_HEIGHT-1;
-  else if (t->ye <               0) t->ye = 0;
-  if      (t->ys > SCREEN_HEIGHT-1) t->ys = SCREEN_HEIGHT-1;
-  else if (t->ys <               0) t->ys = 0;
+  if (t->ye > SCREEN_HEIGHT - 1) t->ye = SCREEN_HEIGHT - 1;
+  else if (t->ye < 0) t->ye = 0;
+  if (t->ys > SCREEN_HEIGHT - 1) t->ys = SCREEN_HEIGHT - 1;
+  else if (t->ys < 0) t->ys = 0;
   // increment
-	++t->x;
-	redge_step(&t->edge_top);
-	redge_step(&t->edge_btm);
+  ++t->x;
+  if (t->x == t->last_x) {
+    return 0;
+  }
+  redge_step(&t->edge_top);
+  redge_step(&t->edge_btm);
   int t_done = 0;
   int b_done = 0;
-	if (redge_done(&t->edge_top)) {
-    t->vtop = next(t->vtop,nindices);
+  if (redge_done(&t->edge_top)) {
+    t->vtop = next(t->vtop, nindices);
     t_done = 1;
   }
-	if (redge_done(&t->edge_btm)) {
-    t->vbtm = prev(t->vbtm,nindices);
+  if (redge_done(&t->edge_btm)) {
+    t->vbtm = prev(t->vbtm, nindices);
     b_done = 1;
   }
-  if (t_done && b_done) {
-    return 0;
-  } else {
-    if (t_done) {
-      int n = next(t->vtop,nindices);
-      redge_init(&t->edge_top, pts[indices[t->vtop]].x,pts[indices[t->vtop]].y,
-                               pts[indices[n]].x,      pts[indices[n]].y);
-    }
-    if (b_done) {
-      int p = prev(t->vbtm,nindices);
-      redge_init(&t->edge_btm, pts[indices[p]].x,      pts[indices[p]].y,
-                               pts[indices[t->vbtm]].x,pts[indices[t->vbtm]].y);
-    }
-    return 1;
+  if (t_done) {
+    int n = next(t->vtop, nindices);
+    redge_init(&t->edge_top, pts[indices[t->vtop]].x, pts[indices[t->vtop]].y,
+      pts[indices[n]].x, pts[indices[n]].y);
   }
+  if (b_done) {
+    int p = prev(t->vbtm, nindices);
+    redge_init(&t->edge_btm, pts[indices[p]].x, pts[indices[p]].y,
+      pts[indices[t->vbtm]].x, pts[indices[t->vbtm]].y);
+  }
+  return 1;
 }
 
 // ____________________________________________________________________________
@@ -441,6 +431,51 @@ static inline int surface_setup_span(trsf_surface *s,int rx,int ry,int rz)
   );
 #endif
   return dr;
+}
+
+
+// ____________________________________________________________________________
+// Polygon clipping ; if the polygon has z coordinates bloew the near z plane
+// in view space, it must be clipped so that only the front part remains.
+void clip_polygon(f_transform trsf, int nindices, const int *indices,
+                  const p3d *pts, int z_clip, p3d *_clipped,int *_n_clipped)
+  //                                                ^^^^^^       ^^^^^^
+  //                         clipped up to nindices+2            |
+  //                                                assumes intialized to zero
+{
+  p3d prev_p    = *(pts + indices[nindices-1]); // last
+  trsf(&prev_p.x, &prev_p.y, &prev_p.z, 1);
+  *_n_clipped = 0;
+  int prev_back = (prev_p.z < z_clip);
+  for (int i = 0; i < nindices; ++i) {
+    p3d p = *(pts + *(indices++));
+    trsf(&p.x, &p.y, &p.z, 1);
+    int back = (p.z < z_clip);
+    if (back ^ prev_back) { // crossing
+      p3d prev_to_p;
+      // delta vector
+      prev_to_p.x = p.x - prev_p.x;
+      prev_to_p.y = p.y - prev_p.y;
+      prev_to_p.z = p.z - prev_p.z;
+      // interpolation ratio
+      int ratio = ((z_clip - prev_p.z) << 8) / (p.z - prev_p.z);
+      // new point
+      _clipped->x = prev_p.x + ((prev_to_p.x * ratio) >> 8);
+      _clipped->y = prev_p.y + ((prev_to_p.y * ratio) >> 8);
+      _clipped->z = prev_p.z + ((prev_to_p.z * ratio) >> 8);
+      ++_clipped;
+      ++(*_n_clipped);
+    }
+    if (!back) {
+      _clipped->x = p.x;
+      _clipped->y = p.y;
+      _clipped->z = p.z;
+      ++_clipped;
+      ++(*_n_clipped);
+    }
+    prev_back = back;
+    prev_p    = p;
+  }
 }
 
 // ____________________________________________________________________________
