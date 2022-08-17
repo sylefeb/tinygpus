@@ -69,6 +69,11 @@ typedef struct {
 	int x, y, z;
 } p3d;
 
+// A 2D point, int coordinates
+typedef struct {
+  int x, y;
+} p2d;
+
 // ____________________________________________________________________________
 //
 // A rasterization edge (a side of a rasterized convex polygon)
@@ -111,15 +116,17 @@ typedef struct {
 //       : \
 //       :  x_end
 
+#define DIV_TABLE_SIZE 1024 // at least SCREEN_WIDTH
+
 // Table of 1/dx, avoids div in many cases
-unsigned short inv_dx[SCREEN_WIDTH];
+unsigned short inv_dx[DIV_TABLE_SIZE];
 
 // Pre-computes tables for rasterization
 static inline void raster_pre()
 {
   inv_dx[0] = 0;
   inv_dx[1] = 65535;
-  for (int x=2;x<SCREEN_WIDTH;++x) {
+  for (int x=2;x< DIV_TABLE_SIZE;++x) {
     inv_dx[x] = 65536/x;
   }
 }
@@ -136,9 +143,9 @@ static inline void redge_init(redge *l, int x0, int y0, int x1, int y1)
   l->x     = x0;       // current x position
 	l->y     = y0 << 16; // current y pos, 16.16
   int dx   = x1 - x0;  // x difference
-  if (dx < SCREEN_WIDTH) { // < SCREEN_WIDTH,  avoid div and use table
+  if (dx < DIV_TABLE_SIZE) { // < DIV_TABLE_SIZE,  avoid div and use table
 	  l->dydx = (y1 - y0) * (int)(inv_dx[dx]);
-  } else {             // >= SCREEN_WIDTH, use div
+  } else {             // >= DIV_TABLE_SIZE, use div
     l->dydx = ((y1 - y0) << 16) / dx;
   }
   // clip line if x is negative
@@ -193,7 +200,7 @@ static inline int prev(int i,int N) {
 
 // ____________________________________________________________________________
 static inline void rconvex_init(
-  rconvex *t, int nindices, const int *indices, const p3d *pts
+  rconvex *t, int nindices, const int *indices, const p2d *pts
 ) {
   // find leftmost points
   int min_x = pts[indices[0]].x;
@@ -230,7 +237,7 @@ static inline void rconvex_init(
 
 // ____________________________________________________________________________
 static inline int rconvex_step(
-  rconvex *t, int nindices, const int *indices, const p3d *pts)
+  rconvex *t, int nindices, const int *indices, const p2d *pts)
 {
   t->ys = t->edge_top.y >> 16;
   t->ye = t->edge_btm.y >> 16;
@@ -286,8 +293,8 @@ typedef struct {
 } trsf_surface;
 
 typedef struct {
-  int u_offs,v_offs;
-  int ded;
+  int   u_offs,v_offs;
+  short ded;
 } rconvex_texturing;
 
 typedef int          int32_t;
@@ -435,21 +442,20 @@ static inline int surface_setup_span(trsf_surface *s,int rx,int ry,int rz)
 
 
 // ____________________________________________________________________________
-// Polygon clipping ; if the polygon has z coordinates bloew the near z plane
+// Polygon clipping ; if the polygon has z coordinates below the near z plane
 // in view space, it must be clipped so that only the front part remains.
-void clip_polygon(f_transform trsf, int nindices, const int *indices,
-                  const p3d *pts, int z_clip, p3d *_clipped,int *_n_clipped)
-  //                                                ^^^^^^       ^^^^^^
-  //                         clipped up to nindices+2            |
-  //                                                assumes intialized to zero
+// This version works without indices.
+//  - p3d pts are the n_pts view-space points of the polygon
+//  - p3d _clipped are the resulting *_n_clipped points of the clipped polygon
+void clip_polygon(int z_clip, const p3d *pts, int n_pts, p3d *_clipped,int *_n_clipped)
+  //                                                          ^^^^^^       ^^^^^^
+  //                                           clipped up to n_pts+2       |
+  //                                                        assumes intialized to zero
 {
-  p3d prev_p    = *(pts + indices[nindices-1]); // last
-  trsf(&prev_p.x, &prev_p.y, &prev_p.z, 1);
-  *_n_clipped = 0;
+  p3d prev_p = *(pts + n_pts - 1); // last
   int prev_back = (prev_p.z < z_clip);
-  for (int i = 0; i < nindices; ++i) {
-    p3d p = *(pts + *(indices++));
-    trsf(&p.x, &p.y, &p.z, 1);
+  for (int i = 0; i < n_pts; ++i) {
+    p3d p = *(pts++);
     int back = (p.z < z_clip);
     if (back ^ prev_back) { // crossing
       p3d prev_to_p;
@@ -458,11 +464,29 @@ void clip_polygon(f_transform trsf, int nindices, const int *indices,
       prev_to_p.y = p.y - prev_p.y;
       prev_to_p.z = p.z - prev_p.z;
       // interpolation ratio
-      int ratio = ((z_clip - prev_p.z) << 8) / (p.z - prev_p.z);
+#if 1
+      int delta = (p.z - prev_p.z);
+      int neg = 0;
+      if (delta < 0) {
+        delta = -delta;
+        neg   = 1;
+      }
+      int ratio;
+      if (delta < DIV_TABLE_SIZE) { // < DIV_TABLE_SIZE,  avoid div and use table
+        ratio = (z_clip - prev_p.z) * (int)(inv_dx[delta]);
+      } else {             // >= DIV_TABLE_SIZE, use div
+        ratio = ((z_clip - prev_p.z) << 16) / (p.z - prev_p.z);
+      }
+      if (neg) {
+        ratio = -ratio;
+      }
+#else
+      int ratio = ((z_clip - prev_p.z) << 16) / (p.z - prev_p.z);
+#endif
       // new point
-      _clipped->x = prev_p.x + ((prev_to_p.x * ratio) >> 8);
-      _clipped->y = prev_p.y + ((prev_to_p.y * ratio) >> 8);
-      _clipped->z = prev_p.z + ((prev_to_p.z * ratio) >> 8);
+      _clipped->x = prev_p.x + ((prev_to_p.x * ratio) >> 16);
+      _clipped->y = prev_p.y + ((prev_to_p.y * ratio) >> 16);
+      _clipped->z = prev_p.z + ((prev_to_p.z * ratio) >> 16);
       ++_clipped;
       ++(*_n_clipped);
     }
