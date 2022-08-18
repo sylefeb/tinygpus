@@ -561,7 +561,7 @@ void main_0()
     int tm      = time();
     int elapsed = tm - tm_frame;
     if (elapsed < 0) { elapsed = 1; }
-    int speed   = (elapsed >> 18);
+    int speed   = (elapsed >> 17);
     view.z     += v_step * speed;
     if (view.z > v_end) {
       v_step = 0;

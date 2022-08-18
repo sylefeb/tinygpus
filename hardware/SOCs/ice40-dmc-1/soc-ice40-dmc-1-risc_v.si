@@ -205,17 +205,18 @@ $$end
 
   // ==============================
   // RAM for CPU (SPRAM)
-  bram_port_io mem;
+  bram_port_io mem_io_ram;
   bram_spram_32bits bram_ram(
-    pram               <:> mem
+    pram               <:> mem_io_ram
   );
 
   // ==============================
   // CPU
   uint32 user_data(0);
+  bram_port_io mem_io_cpu;
   rv32i_cpu cpu(
     user_data        <:: user_data,
-    mem              <:> mem,
+    mem              <:> mem_io_cpu,
   );
 
   // ==============================
@@ -313,9 +314,9 @@ $$if SIMULATION then
   uint32 last_iter(0);
 $$end
 
-  sameas(mem.addr)    prev_mem_addr(0);
-  sameas(mem.wenable) prev_mem_wenable(0);
-  sameas(mem.wdata)   prev_mem_wdata(0);
+  sameas(mem_io_cpu.addr)    prev_mem_addr(0);
+  sameas(mem_io_cpu.wenable) prev_mem_wenable(0);
+  sameas(mem_io_cpu.wdata)   prev_mem_wdata(0);
 
   // ==============================
   // command queue
@@ -340,6 +341,12 @@ $$end
                       txm.busy,
                       ~cmdq.full
                       };
+
+    // track CPU ram
+    mem_io_cpu.rdata   = mem_io_ram.rdata;
+    mem_io_ram.wdata   = mem_io_cpu.wdata;   // TODO: bypass burst xfer SPI<=>RAM
+    mem_io_ram.wenable = mem_io_cpu.wenable;
+    mem_io_ram.addr    = mem_io_cpu.addr;
 
     // track texture memory interface
     txm.in_ready            = txm_io.in_ready;
@@ -430,9 +437,9 @@ $$end
     cmdq.in_next = gpu.ready & ~cmdq.empty;
 
     // refresh memory mappings with a one cycle latency to not pressure fmax
-    prev_mem_addr    = mem.addr;
-    prev_mem_wenable = mem.wenable;
-    prev_mem_wdata   = mem.wdata;
+    prev_mem_addr    = mem_io_cpu.addr;
+    prev_mem_wenable = mem_io_cpu.wenable;
+    prev_mem_wdata   = mem_io_cpu.wdata;
 
     // uncomment to visualize GPU bound vs CPU bound
     //                          vvvvvvv    vvvvvvv

@@ -451,7 +451,7 @@ $$end
       tcol_rdy           = 0; // next column height ready
       pickh_done         = 0; // picking done
 $$if SIMULATION then
-      __display("[gpu::span_drawer] span %d->%d",col_start,col_end);
+      // __display("[gpu::span_drawer] span %d->%d",col_start,col_end);
 $$end
     } else { // in_start -------------------------------
 
