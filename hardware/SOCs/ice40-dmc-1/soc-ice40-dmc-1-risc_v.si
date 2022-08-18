@@ -401,11 +401,11 @@ $$elseif not MCH2022 then
               o_resn    = ~ prev_mem_wdata[0,1];
 $$end
             }
-            case 2b10: { // texture memory CPU write
+            case 2b10: { // texture memory CPU read
               txm.addr     = prev_mem_wdata[0,24];
-              txm.in_ready = 1; // NOTE: we assume there cannot be collisions
-                               // with the texture sampler ; CPU should not
-                               // drive the texture while draw calls are pending
+              txm.in_ready = 1; // NOTE: assumes there cannot be collisions with
+                                // the texture sampler ; CPU should not drive
+                                // texture memory while draw calls are pending
             }
             default: { }
           }

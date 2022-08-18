@@ -26,7 +26,7 @@ trsf_surface      trsf_surfaces[n_surfaces];
 // array of textrung data
 rconvex_texturing rtexs[n_faces];
 
-#define DEBUG
+// #define DEBUG
 // ^^^^^^^^^^^^ uncomment to get profiling info over UART
 
 const int z_clip = 256; // near z clipping plane
@@ -35,7 +35,7 @@ const int z_clip = 256; // near z clipping plane
 // Rotations
 // -----------------------------------------------------
 
-static inline void rot_z(int angle, int *x, int *y, int *z)
+static inline void rot_z(int angle, short *x, short *y, short *z)
 {
   int sin = sine_table[ angle         & 4095];
   int cos = sine_table[(angle + 1024) & 4095];
@@ -44,7 +44,7 @@ static inline void rot_z(int angle, int *x, int *y, int *z)
   *y = (sin * tx + cos * ty) >> 12;
 }
 
-static inline void rot_y(int angle, int *x, int *y, int *z)
+static inline void rot_y(int angle, short *x, short *y, short *z)
 {
   int sin = sine_table[ angle         & 4095];
   int cos = sine_table[(angle + 1024) & 4095];
@@ -53,7 +53,7 @@ static inline void rot_y(int angle, int *x, int *y, int *z)
   *z = (sin * tx + cos * tz) >> 12;
 }
 
-static inline void rot_x(int angle, int *x, int *y, int *z)
+static inline void rot_x(int angle, short *x, short *y, short *z)
 {
   int sin = sine_table[angle & 4095];
   int cos = sine_table[(angle + 1024) & 4095];
@@ -81,7 +81,7 @@ unsigned int num_vis;
 
 // -----------------------------------------------------
 
-static inline void transform(int *x, int *y, int *z,int w)
+static inline void transform(short *x, short *y, short *z, short w)
 {
   if (w != 0) { // vertex, else direction
     *x -= view.x; // translate vertices in view space
@@ -245,7 +245,7 @@ void rasterize_faces(int first, int num)
     for (int c = rtri.x; c <= rtri.last_x; ++c) {
       rconvex_step(&rtri, num_idx, ptr_indices, ptr_prj_vertices);
       // insert span
-      if (span_alloc_0 + (MAX_NUM_SPANS - span_alloc_1) < MAX_NUM_SPANS && rtri.ys < rtri.ye) {
+      if (span_alloc_0 + (MAX_NUM_SPANS - span_alloc_1) + 1 < MAX_NUM_SPANS && rtri.ys < rtri.ye) {
         // insert span record
         t_span *span;
         if (core_id() == 0) {
@@ -360,6 +360,38 @@ void main_1()
 
 // -----------------------------------------------------
 
+#ifndef EMUL
+unsigned short locate_leaf()
+{
+  unsigned short nid = 0/*root*/;
+  while (1) {
+    // reached a leaf?
+    if (nid & 0x8000) {
+      // return leaf index
+      return ~nid;
+    }
+    // get node and plane
+    t_my_node nd;
+    spiflash_copy(BSP_NODES + nid * sizeof(t_my_node), (unsigned char*)&nd, sizeof(nd));
+    t_my_plane pl;
+    spiflash_copy(BSP_PLANES + nd.plane_id * sizeof(t_my_plane), (unsigned char*)&pl, sizeof(pl));
+    // compute side
+    int side = (dot3(view.x,view.y,view.z, pl.nx,pl.ny,pl.nz)>>8) - (pl.dist);
+    //                                                       ^^^
+    //                                               >>8 for 256 factor
+    // printf("view %d,%d,%d nid = %d pl = %d side = %d\n", view.x, view.y, view.z, nid, nd.plane_id, side);
+    if (side < 0) {
+      nid = nd.back;
+    } else {
+      nid = nd.front;
+    }
+  }
+  return 0;
+}
+#endif
+
+// -----------------------------------------------------
+
 // Draws all screen columns
 // runs on core 0, core 1 assists
 static inline void render_frame()
@@ -410,6 +442,13 @@ static inline void render_frame()
 #ifndef EMUL
   // before drawing cols wait for previous frame
   wait_all_drawn();
+
+  // NOTE: here we can access SPI-flash
+  unsigned int tm_loc = time();
+  unsigned short leaf = locate_leaf();
+  unsigned int took = time() - tm_loc;
+  printf("view %d,%d,%d in leaf %d (took %d cycles)\n", view.x, view.y, view.z, leaf, took);
+
 #endif
 
 #ifdef DEBUG
@@ -482,6 +521,7 @@ void main_0()
   // --------------------------
 #ifndef EMUL
   *LEDS = 0;
+  spiflash_init();
   oled_init();
   oled_fullscreen();
 #endif

@@ -48,7 +48,7 @@ volatile int frame;
 
 int view_dist = 600;
 
-static inline void project(const p3d* pt, p3d *pr)
+static inline void project(const p3d* pt, p2d *pr)
 {
 	int z     = pt->z; // view space
 	int inv_z = 65536 / z;
@@ -72,7 +72,7 @@ const int indices[12] = {
   2,0,3,
 };
 
-p3d     prj_points[8];
+p2d     prj_points[8];
 surface srfs[4];
 
 // -----------------------------------------------------
@@ -147,7 +147,7 @@ static inline void render_frame()
           int dr = surface_setup_span(&tsrfs[s], rx,ry,rz);
           col_send(
             COLDRAW_PLANE_B(rtexs[s].ded,dr),
-            COLDRAW_COL(tet == 0 ? 125 : 71 /*texture id*/, rtris[s].ys,rtris[s].ye, light) | PLANE
+            COLDRAW_COL(tet == 0 ? 31 : 71 /*texture id*/, rtris[s].ys,rtris[s].ye, light) | PLANE
           );
 
         }

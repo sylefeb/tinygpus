@@ -66,7 +66,7 @@
 
 // A 3D point, int coordinates
 typedef struct {
-	int x, y, z;
+	short x, y, z;
 } p3d;
 
 // A 2D point, int coordinates
@@ -285,15 +285,14 @@ static inline int rconvex_step(
 // for a texturing plane
 
 typedef struct {
-  int nx,ny,nz;
-  int ux,uy,uz;
-  int vx,vy,vz;
+  short ux,uy,uz;
+  short vx,vy,vz;
 } surface;
 
 typedef struct {
-  int nx,ny,nz;
-  int ux,uy,uz;
-  int vx,vy,vz;
+  short nx,ny,nz;
+  short ux,uy,uz;
+  short vx,vy,vz;
 } trsf_surface;
 
 typedef struct {
@@ -338,7 +337,7 @@ static inline int dot3(int a, int b,int c, int x,int y,int z)
 static inline void cross(
 	int x0,int y0,int z0,
 	int x1,int y1,int z1,
-	int *x, int *y, int *z)
+  short *x, short *y, short *z)
 {
   *x = (y0*z1 - y1*z0) >> 8;
   *y = (z0*x1 - z1*x0) >> 8;
@@ -347,7 +346,7 @@ static inline void cross(
 
 // ____________________________________________________________________________
 // Normalizes a vector (makes it a unit vector, length == 1)
-static inline void normalize(int *x, int *y, int *z)
+static inline void normalize(short *x, short *y, short *z)
 {
   int lensq = dot3(*x,*y,*z, *x,*y,*z);
   int len   = sqrt_i32(lensq);
@@ -367,31 +366,32 @@ static inline void surface_pre(surface *s,int p0,int p1,int p2,const p3d *pts)
   int d20x = pts[p2].x - pts[p0].x;
   int d20y = pts[p2].y - pts[p0].y;
   int d20z = pts[p2].z - pts[p0].z;
-  cross(d10x,d10y,d10z,    d20x,d20y,d20z,    &s->nx,&s->ny,&s->nz);
-  normalize(&s->nx,&s->ny,&s->nz);
+  p3d n;
+  cross(d10x,d10y,d10z,    d20x,d20y,d20z,    &n.x,&n.y,&n.z);
+  normalize(&n.x,&n.y,&n.z);
   // compute u,v from n
-  cross(s->nx,s->ny,s->nz, 256,0,0,           &s->ux,&s->uy,&s->uz);
+  cross(n.x,n.y,n.z, 256,0,0,           &s->ux,&s->uy,&s->uz);
   normalize(&s->ux,&s->uy,&s->uz);
-  cross(s->nx,s->ny,s->nz, s->ux,s->uy,s->uz, &s->vx,&s->vy,&s->vz);
+  cross(n.x,n.y,n.z, s->ux,s->uy,s->uz, &s->vx,&s->vy,&s->vz);
   normalize(&s->vx,&s->vy,&s->vz);
 }
 
 // ____________________________________________________________________________
 // Transform callback
-typedef void (*f_transform)(int *x,int *y,int *z,int w);
+typedef void (*f_transform)(short *x, short *y, short *z, short w);
 
 // ____________________________________________________________________________
 // Transform a surface with the current transform and view distance
 static inline void surface_transform(const surface *s,trsf_surface *ts,
                                      f_transform trsf)
 {
-  ts->nx = s->nx; ts->ny = s->ny; ts->nz = s->nz;
   ts->ux = s->ux; ts->uy = s->uy; ts->uz = s->uz;
   ts->vx = s->vx; ts->vy = s->vy; ts->vz = s->vz;
   // transform plane vectors
-  trsf(&ts->nx,&ts->ny,&ts->nz,0);
   trsf(&ts->ux,&ts->uy,&ts->uz,0);
   trsf(&ts->vx,&ts->vy,&ts->vz,0);
+  // compute normal
+  cross(ts->vx, ts->vy, ts->vz, ts->ux, ts->uy, ts->uz, &ts->nx, &ts->ny, &ts->nz);
 }
 
 // ____________________________________________________________________________
