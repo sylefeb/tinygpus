@@ -71,7 +71,7 @@ typedef struct {
 
 // A 2D point, int coordinates
 typedef struct {
-  int x, y;
+  short x, y;
 } p2d;
 
 // ____________________________________________________________________________
