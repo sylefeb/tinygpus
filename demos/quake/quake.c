@@ -25,10 +25,10 @@ trsf_surface      trsf_surfaces[n_surfaces];
 // array of textrung data
 rconvex_texturing rtexs[n_faces];
 
-// #define DEBUG
+//#define DEBUG
 // ^^^^^^^^^^^^ uncomment to get profiling info over UART
 
-const int z_clip = 16; // near z clipping plane
+const int z_clip = 256; // near z clipping plane
 
 // -----------------------------------------------------
 // Rotations
@@ -81,7 +81,7 @@ static inline void transform(int *x, int *y, int *z,int w)
   }
 #ifndef EMUL
   rot_y(v_angle_y, x, y, z);
-  rot_x(v_angle_y<<1, x, y, z);
+  // rot_z(v_angle_y<<1, x, y, z);
   // rot_x(sine_table[(frame<<6)&4095]>>5, x, y, z);
 #endif
 }
@@ -125,6 +125,9 @@ static inline void render_frame()
 
 #ifdef DEBUG
   unsigned int tm_1 = time();
+  unsigned int num_clipped = 0;
+  unsigned int num_culled  = 0;
+  unsigned int num_vis     = 0;
 #endif
 
   // NOTE: vertices are not pre-transformed to save memory
@@ -147,28 +150,52 @@ static inline void render_frame()
     surface_transform(&surfaces[s], &trsf_surfaces[s], transform);
   }
   // rasterize faces
-  int *fptr = faces;
-  for (int f = 0; f < n_faces ; ++f) {
+  unsigned short *fptr = faces;
+  for (int f = 0; f < n_faces; ++f) {
     int first_idx = *(fptr++);
-    int num_idx   = *(fptr++);
-    int srfs_idx  = *(fptr++);
-    int tex_id    = *(fptr++);
+    int num_idx = *(fptr++);
+    int srfs_idx = *(fptr++);
+    int tex_id = *(fptr++);
+    // check vertices for clipping
+    int *idx = indices + first_idx;
+    int n_clipped = 0;
+    int max_x = -2147483647; int max_y = -2147483647;
+    int min_x = 2147483647; int min_y = 2147483647;
+    for (int v = 0; v < num_idx; ++v) {
+      p2d p = prj_vertices[*(idx++)];
+      if (p.x == 0x7FFFFFFF) {
+        ++n_clipped;
+      } else {
+        if (p.x > max_x) { max_x = p.x; }
+        if (p.x < min_x) { min_x = p.x; }
+        if (p.y > max_y) { max_y = p.y; }
+        if (p.y < min_y) { min_y = p.y; }
+      }
+    }
+    // all clipped => skip
+    if (n_clipped == num_idx) {
+#ifdef DEBUG
+      ++num_culled;
+#endif
+      continue;
+    }
+    // out of bounds => skip
+    if (min_x >= SCREEN_WIDTH || max_x <= 0 || min_y >= SCREEN_HEIGHT || max_y <= 0) {
+#ifdef DEBUG
+      ++num_culled;
+#endif
+      continue;
+    }
     // prepare texturing info
     rconvex_texturing_pre(&trsf_surfaces[srfs_idx], transform,
       vertices + indices[first_idx], &rtexs[f]);
     // backface? => skip
-    if (rtexs[f].ded < 0) continue; 
-    // check vertices for clipping
-    int *idx      = indices + first_idx;
-    int n_clipped = 0;
-    for (int v = 0; v < POLY_MAX_SZ; ++v) {
-      if (v == num_idx) break;
-      if (prj_vertices[*(idx++)].x == 0x7FFFFFFF) {
-        ++n_clipped;
-      }
+    if (rtexs[f].ded < 0) {
+#ifdef DEBUG
+      ++num_culled;
+#endif
+      continue;
     }
-    // all clipped => skip
-    if (n_clipped == num_idx) continue;
     const int *ptr_indices;
     const p2d *ptr_prj_vertices;
     if (n_clipped == 0) {
@@ -176,12 +203,15 @@ static inline void render_frame()
       ptr_indices = indices + first_idx;
       ptr_prj_vertices = prj_vertices;
     } else {
+#ifdef DEBUG
+      ++num_clipped;
+#endif
       // clip the face
       // -> transform vertices
       int *idx = indices + first_idx;
       p3d *v_dst = trsf_vertices;
-      for (int v = 0; v < POLY_MAX_SZ; ++v) {
-        if (v == num_idx) break;
+      for (int v = 0; v < POLY_MAX_SZ && v < num_idx; ++v) {
+        //            ^^^^^^ encourages unrolling?
         p3d p = vertices[*(idx++)];
         transform(&p.x, &p.y, &p.z, 1);
         *(v_dst++) = p;
@@ -206,6 +236,9 @@ static inline void render_frame()
       ptr_prj_vertices = face_prj_vertices;
       num_idx = n_clipped;
     }
+#ifdef DEBUG
+    ++num_vis;
+#endif
     // rasterize the face into spans
     rconvex rtri;
     rconvex_init(&rtri, num_idx, ptr_indices, ptr_prj_vertices);
@@ -218,7 +251,6 @@ static inline void render_frame()
         span->ys      = rtri.ys;
         span->ye      = rtri.ye;
         span->fid     = f;
-        // if (span->fid == 256+36) { printf("%d -> %d\n", span->ys, span->ye); }
         span->next    = span_heads[c];
         span_heads[c] = ispan;
       }
@@ -262,7 +294,6 @@ static inline void render_frame()
       int sid = faces[(span->fid << 2) + 2];
       int tid = faces[(span->fid << 2) + 3];
       int dr  = surface_setup_span(&trsf_surfaces[sid], rx,ry,rz);
-      // printf("ded:%d dr:%d\n",rtexs[span->fid].ded,dr);
 #ifndef EMUL
 #ifdef DEBUG
       tm_srfspan += time() - tm_ss;
@@ -285,7 +316,7 @@ static inline void render_frame()
       for (int j = span->ys; j <= span->ye; ++j) {
         pixelAt(fb, c, j)[0] = span->fid&255;
         pixelAt(fb, c, j)[1] = (span->fid>>8)&255;
-        pixelAt(fb, c, j)[2] = span->fid>>16;
+        pixelAt(fb, c, j)[2] = 0;
       }
 #endif
       // next span
@@ -319,9 +350,9 @@ static inline void render_frame()
 
 #ifdef DEBUG
   unsigned int tm_4 = time();
-  printf("(cycles) raster %d, wait %d, spans %d, colprocess %d, srfspan %d, tot %d\n",
+  printf("(cycles) raster %d, wait %d, spans %d, colprocess %d, srfspan %d [tot %d]\n",
      tm_2-tm_1, tm_3-tm_2, tm_4-tm_3, tm_colprocess, tm_srfspan, tm_4-tm_1);
-  printf("num spans %d\n",span_alloc);
+  printf("num spans %d, faces: num vis %d, clipped %d, culled %d\n",span_alloc,num_vis,num_clipped,num_culled);
 #endif
 
 }
@@ -366,8 +397,8 @@ void main_0()
   view.y     += 16; // move up a bit
 #endif
   v_angle_y   = 0;
-  int v_start = view.z - 1100;
-  int v_end   = view.z + 1700;
+  int v_start = view.z - 1000;
+  int v_end   = view.z + 2100;
   int v_step  = 1;
 
 #ifndef EMUL

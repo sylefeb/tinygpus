@@ -199,7 +199,9 @@ static inline int prev(int i,int N) {
 }
 
 // ____________________________________________________________________________
-static inline void rconvex_init(
+// Start rasterizing a 2D polygon
+// returns 0 if out of bound in x.
+static inline int rconvex_init(
   rconvex *t, int nindices, const int *indices, const p2d *pts
 ) {
   // find leftmost points
@@ -215,6 +217,7 @@ static inline void rconvex_init(
       max_x     = x;
     }
   }
+  if (max_x < 0 || min_x > SCREEN_WIDTH) return 0;
   t->x      = min_x;
   if (t->x < 0) { t->x = 0; } // redge_init properly deals with this too
   t->last_x = max_x;
@@ -233,6 +236,7 @@ static inline void rconvex_init(
   redge_init(&t->edge_btm,
              pts[indices[left_most_prev]].x, pts[indices[left_most_prev]].y,
              pts[indices[left_most]].x,      pts[indices[left_most]].y);
+  return 1;
 }
 
 // ____________________________________________________________________________
@@ -452,8 +456,10 @@ void clip_polygon(int z_clip, const p3d *pts, int n_pts, p3d *_clipped,int *_n_c
   //                                           clipped up to n_pts+2       |
   //                                                        assumes intialized to zero
 {
-  p3d prev_p = *(pts + n_pts - 1); // last
+  // initialize prev with last point
+  p3d prev_p = *(pts + n_pts - 1);
   int prev_back = (prev_p.z < z_clip);
+  // go through polygon points
   for (int i = 0; i < n_pts; ++i) {
     p3d p = *(pts++);
     int back = (p.z < z_clip);
