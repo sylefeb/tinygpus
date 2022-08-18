@@ -422,32 +422,36 @@ static inline void render_frame()
   for (int c = 0; c < SCREEN_WIDTH; ++c) {
 
     // go through lists
+    int empty = 1;
     for (int l = 0; l < 2; ++l) {
       unsigned short ispan = l == 0 ? span_heads_0[c] : span_heads_1[c];
+      empty = empty & !ispan;
       render_spans(c, ispan);
     }
 
 #ifndef EMUL
-      // background filler
+    // background filler
+    if (empty) {
       col_send(
         COLDRAW_WALL(Y_MAX, 0, 0),
         COLDRAW_COL(0, 0, 239, 0) | WALL
       );
-      // send end of column
-      col_send(0, COLDRAW_EOC);
+    }
+    // send end of column
+    col_send(0, COLDRAW_EOC);
 #endif
-      // clear spans for this column
-      span_heads_0[c] = 0;
-      span_heads_1[c] = 0;
+    // clear spans for this column
+    span_heads_0[c] = 0;
+    span_heads_1[c] = 0;
 
 #ifndef EMUL
     // process pending column commands
 #ifdef DEBUG
-      unsigned int tm_cp = time();
+    unsigned int tm_cp = time();
 #endif
     col_process();
 #ifdef DEBUG
-      tm_colprocess += time() - tm_cp;
+    tm_colprocess += time() - tm_cp;
 #endif
 #endif
 
