@@ -26,7 +26,7 @@ trsf_surface      trsf_surfaces[n_surfaces];
 // array of textrung data
 rconvex_texturing rtexs[n_faces];
 
-//#define DEBUG
+#define DEBUG
 // ^^^^^^^^^^^^ uncomment to get profiling info over UART
 
 const int z_clip = 256; // near z clipping plane
@@ -70,6 +70,14 @@ static inline void rot_x(int angle, int *x, int *y, int *z)
 int frame = 0;
 int tm_frame = 0;
 int v_angle_y = 0;
+
+#ifdef DEBUG
+unsigned int tm_colprocess;
+unsigned int tm_srfspan;
+unsigned int num_clipped;
+unsigned int num_culled;
+unsigned int num_vis;
+#endif
 
 // -----------------------------------------------------
 
@@ -263,68 +271,52 @@ void rasterize_faces(int first, int num)
 
 // -----------------------------------------------------
 
-void render_spans(int c)
+void render_spans(int c, int ispan)
 {
-  // go through lists
-  for (int l = 0; l < 2; ++l) {
-    unsigned short ispan = l == 0 ? span_heads_0[c] : span_heads_1[c];
-    while (ispan) {
-      t_span *span = span_pool + ispan;
-      // pixel pos
-      int rz = 256;
-      int rx = c - SCREEN_WIDTH / 2;
-      int ry = span->ys - SCREEN_HEIGHT / 2;
+  while (ispan) {
+    t_span *span = span_pool + ispan;
+    // pixel pos
+    int rz = 256;
+    int rx = c - SCREEN_WIDTH / 2;
+    int ry = span->ys - SCREEN_HEIGHT / 2;
 #ifdef DEBUG
-      unsigned int tm_ss = time();
+    unsigned int tm_ss = time();
 #endif
-      // bind the surface to the rasterizer
-      rconvex_texturing_bind(&rtexs[span->fid]);
-      // setup the surface span parameters
-      int sid = faces[(span->fid << 2) + 2];
-      int tid = faces[(span->fid << 2) + 3];
-      int dr = surface_setup_span(&trsf_surfaces[sid], rx, ry, rz);
+    // bind the surface to the rasterizer
+    rconvex_texturing_bind(&rtexs[span->fid]);
+    // setup the surface span parameters
+    int sid = faces[(span->fid << 2) + 2];
+    int tid = faces[(span->fid << 2) + 3];
+    int dr = surface_setup_span(&trsf_surfaces[sid], rx, ry, rz);
 #ifndef EMUL
 #ifdef DEBUG
-      tm_srfspan += time() - tm_ss;
+    tm_srfspan += time() - tm_ss;
 #endif
-      // column drawing
-      col_send(
-        COLDRAW_PLANE_B(rtexs[span->fid].ded, dr),
-        COLDRAW_COL(tid, span->ys, span->ye,
-          15 /*light*/) | PLANE
-      );
-      // process pending column commands
+    // column drawing
+    col_send(
+      COLDRAW_PLANE_B(rtexs[span->fid].ded, dr),
+      COLDRAW_COL(tid, span->ys, span->ye,
+        15 /*light*/) | PLANE
+    );
+    // process pending column commands
 #ifdef DEBUG
-      unsigned int tm_cp = time();
+    unsigned int tm_cp = time();
 #endif
-      col_process();
+    col_process();
 #ifdef DEBUG
-      tm_colprocess += time() - tm_cp;
+    tm_colprocess += time() - tm_cp;
 #endif
 #else
-      for (int j = span->ys; j <= span->ye; ++j) {
-        //pixelAt(fb, c, j)[0] = span->fid&255;
-        //pixelAt(fb, c, j)[1] = (span->fid>>8)&255;
-        pixelAt(fb, c, j)[2] += 16;
-      }
-#endif
-      // next span
-      ispan = span->next;
+    for (int j = span->ys; j <= span->ye; ++j) {
+      //pixelAt(fb, c, j)[0] = span->fid&255;
+      //pixelAt(fb, c, j)[1] = (span->fid>>8)&255;
+      pixelAt(fb, c, j)[2] += 16;
     }
+#endif
+    // next span
+    ispan = span->next;
   }
 
-#ifndef EMUL
-  // background filler
-  col_send(
-    COLDRAW_WALL(Y_MAX, 0, 0),
-    COLDRAW_COL(0, 0, 239, 0) | WALL
-  );
-  // send end of column
-  col_send(0, COLDRAW_EOC);
-#endif
-  // clear spans for this column
-  span_heads_0[c] = 0;
-  span_heads_1[c] = 0;
 }
 
 // -----------------------------------------------------
@@ -341,7 +333,7 @@ void main_1()
   while (1) {
 
     // wait for the order
-    while (core1_todo != 1) { }
+    while (core1_todo != 1) {}
     core1_todo = 0;
     core1_done = 0;
     // project the other half of the vertices
@@ -361,7 +353,7 @@ void main_1()
     //*LEDS = 0;
     // sync
     core1_done = 2;
- 
+
   }
 #endif
 }
@@ -378,14 +370,14 @@ static inline void render_frame()
 
 #ifdef DEBUG
   unsigned int tm_1 = time();
-  unsigned int num_clipped = 0;
-  unsigned int num_culled  = 0;
-  unsigned int num_vis     = 0;
+  num_clipped = 0;
+  num_culled = 0;
+  num_vis = 0;
 #endif
 
   /// project vertices
 #ifdef EMUL
-  project_vertices(0, n_vertices-1);
+  project_vertices(0, n_vertices - 1);
 #else
   // request core 1 assistance
   core1_todo = 1;
@@ -393,7 +385,7 @@ static inline void render_frame()
   while (core1_done != 1) {} // wait for core 1
 #endif
   /// transform surfaces
-  for (int s = 0; s < n_surfaces ; ++s) {
+  for (int s = 0; s < n_surfaces; ++s) {
     surface_transform(&surfaces[s], &trsf_surfaces[s], transform);
   }
   /// rasterize faces
@@ -408,7 +400,7 @@ static inline void render_frame()
 #endif
 
 #ifdef EMUL
-  printf("%d spans\n", span_alloc_0 + (MAX_NUM_SPANS-span_alloc_1));
+  printf("%d spans\n", span_alloc_0 + (MAX_NUM_SPANS - span_alloc_1));
 #endif
 
 #ifdef DEBUG
@@ -422,13 +414,31 @@ static inline void render_frame()
 
 #ifdef DEBUG
   unsigned int tm_3 = time();
-  unsigned int tm_colprocess = 0;
-  unsigned int tm_srfspan = 0;
+  tm_colprocess = 0;
+  tm_srfspan = 0;
 #endif
 
   /// render the spans
-  for (int c = 0; c < SCREEN_WIDTH ; ++c) {
-    render_spans(c);
+  for (int c = 0; c < SCREEN_WIDTH; ++c) {
+
+    // go through lists
+    for (int l = 0; l < 2; ++l) {
+      unsigned short ispan = l == 0 ? span_heads_0[c] : span_heads_1[c];
+      render_spans(c, ispan);
+    }
+
+#ifndef EMUL
+      // background filler
+      col_send(
+        COLDRAW_WALL(Y_MAX, 0, 0),
+        COLDRAW_COL(0, 0, 239, 0) | WALL
+      );
+      // send end of column
+      col_send(0, COLDRAW_EOC);
+#endif
+      // clear spans for this column
+      span_heads_0[c] = 0;
+      span_heads_1[c] = 0;
 
 #ifndef EMUL
     // process pending column commands
