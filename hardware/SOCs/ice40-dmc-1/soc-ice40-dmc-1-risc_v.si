@@ -300,7 +300,7 @@ $$end
 
   // ==============================
   // bust reads texture memory => RAM
-  uint24 txm_burst_read_dst(0);
+  uint22 txm_burst_read_dst(0);
   uint1  txm_burst_read_active(0);
   uint32 txm_burst_data(0);
   uint5  txm_burst_data_cursor(0);
@@ -346,7 +346,7 @@ $$end
                       1b0,
                       1b0,
                       cmdq.empty,
-                      txm.busy,
+                      txm.busy | txm_burst_read_active,
                       ~cmdq.full
                       };
 
@@ -358,7 +358,9 @@ $$end
     mem_io_ram.addr    = txm_burst_read_active ? txm_burst_read_dst
                                                : mem_io_cpu.addr;
     if (mem_io_ram.wenable & txm_burst_data_available) {
-      __display("writting %x @%x",mem_io_ram.wdata,mem_io_ram.addr);
+      /*if (mem_io_ram.wdata != 0)*/ {
+        __display("writting %x @%x",mem_io_ram.wdata,mem_io_ram.addr<<2);
+      }
     }
     // track texture memory interface
     dataAvail.valid         = txm_io.in_ready | txm_burst_read_active;
@@ -447,6 +449,7 @@ $$end
               //        texture memory while draw calls are pending
               // NOTE2: CPU cannot write to RAM while the burst occurs,
               //        and should wait on user_data, txm.busy bit
+              // NOTE3: destination addresses have to be 32-bits aligned
               uint1 len_else_dst    <:: prev_mem_wdata[31,1];
               // ^^^ bit 31 indicates whether we are setting the length (bytes)
               // or the destination address (in ram)
@@ -455,10 +458,10 @@ $$end
               // memory) or the destination address (in ram)
               // Set size, then destination, then source (triggers the burst)
               if (len_else_dst) {
-                txm_burst_len       = prev_mem_wdata[2,22];
+                txm_burst_len         = prev_mem_wdata[2,22];
               } else {
                 if (~src_and_trigger) {
-                  txm_burst_read_dst  = prev_mem_wdata[0,24];
+                  txm_burst_read_dst  = prev_mem_wdata[2,22];
                 }
               }
               txm.addr              = prev_mem_wdata[0,24];
@@ -466,7 +469,7 @@ $$end
               txm_burst_data_cursor = 5b10000;
               if (src_and_trigger) {
                 __display("[cycle %d] BURST start, from @%x to @%x, len %d",
-                    iter,txm_burst_read_dst,txm.addr,txm_burst_len);
+                    iter,txm.addr,txm_burst_read_dst<<2,txm_burst_len);
               }
             }
             default: { }

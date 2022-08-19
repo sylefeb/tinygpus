@@ -31,7 +31,7 @@ void main_load_code()
   *LEDS = 2;
   // copy to the start of the memory segment
   unsigned char *code = (unsigned char *)0x0000004;
-  spiflash_copy(PAYLOAD_OFFSET/*offset*/,code,131088/*SPRAM size*/);
+  spiflash_copy(PAYLOAD_OFFSET/*offset*/,code,131000/*131088*//*SPRAM size*/);
   //                                          ^^^^^^ max code image size
   // jump!
   *LEDS = 15;
