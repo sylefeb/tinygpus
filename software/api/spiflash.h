@@ -37,11 +37,16 @@ static inline void spiflash_read_end() { }
 
 static inline unsigned char *spiflash_copy(int addr,unsigned char *dst,int len)
 {
+  /*
   while (len > 0) {
     *SPIFLASH = addr++;
-    while (spiflash_busy()) { /*nothing*/ }
+    while (spiflash_busy()) {  } // wait
     *dst = spiflash_byte();
     ++ dst;
     -- len;
   }
+  */
+  *SPIFLASH = (1<<31) | len;
+  *SPIFLASH = (int)dst;
+  *SPIFLASH = (1<<30) | addr;
 }

@@ -19,7 +19,7 @@
 // Rotations
 // -----------------------------------------------------
 
-static inline void rot_z(int angle, int *x, int *y, int *z)
+static inline void rot_z(int angle, short *x, short *y, short *z)
 {
   int sin = sine_table[ angle         & 4095];
   int cos = sine_table[(angle + 1024) & 4095];
@@ -28,7 +28,7 @@ static inline void rot_z(int angle, int *x, int *y, int *z)
   *y = (sin * tx + cos * ty) >> 12;
 }
 
-static inline void rot_y(int angle, int *x, int *y, int *z)
+static inline void rot_y(int angle, short *x, short *y, short *z)
 {
   int sin = sine_table[ angle         & 4095];
   int cos = sine_table[(angle + 1024) & 4095];
@@ -79,7 +79,7 @@ surface srfs[4];
 
 int angle;
 
-static inline void transform(int *x, int *y, int *z,int w)
+static inline void transform(short *x, short *y, short *z,short w)
 {
   rot_y(angle   , x,y,z);
   rot_z(angle>>1, x,y,z);
@@ -234,6 +234,7 @@ void main_0()
 
 void main()
 {
+  *LEDS = 1;
   if (core_id()) {
 		main_1();
 	} else {

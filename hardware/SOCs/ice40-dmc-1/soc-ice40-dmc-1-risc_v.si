@@ -105,9 +105,9 @@ $$end
 // --------------------------------------------------
 
 unit adapterDataAvailable(
-  input   uint1 valid,
-  input   uint1 data_avail_pulse,
-  output! uint1 data_avail_high)
+  input     uint1 valid,
+  input     uint1 data_avail_pulse,
+  output(!) uint1 data_avail_high)
 {
   always {
     data_avail_high = ~valid ? 0 : (data_avail_high | data_avail_pulse);
@@ -118,7 +118,7 @@ unit adapterDataAvailable(
 // Design main
 // --------------------------------------------------
 
-algorithm main(
+unit main(
   output uint$NUM_LEDS$ leds,
 $$if BUTTONS then
   input  uint$NUM_BTNS$ btns,
@@ -285,8 +285,7 @@ $$else -- not MCH2022
     );
 $$end
     // adapts the data available pulse across clock domains
-    adapterDataAvailable _<@clock2x>(
-      valid            <: txm_io.in_ready,
+    adapterDataAvailable dataAvail<@clock2x>(
       data_avail_pulse <: txm.rdata_available,
       data_avail_high  :> txm_io.data_available
     );
@@ -298,6 +297,15 @@ $$if SIMULATION then
   uint1 ram_csn(1); uint1 ram_clk(0); uint1 ram_io0(0);
   uint1 ram_io1(0); uint1 ram_io2(0); uint1 ram_io3(0);
 $$end
+
+  // ==============================
+  // bust reads texture memory => RAM
+  uint24 txm_burst_read_dst(0);
+  uint1  txm_burst_read_active(0);
+  uint32 txm_burst_data(0);
+  uint5  txm_burst_data_cursor(0);
+  uint1  txm_burst_data_available(0);
+  uint22 txm_burst_len(0);
 
   // ==============================
   // UART
@@ -344,18 +352,43 @@ $$end
 
     // track CPU ram
     mem_io_cpu.rdata   = mem_io_ram.rdata;
-    mem_io_ram.wdata   = mem_io_cpu.wdata;   // TODO: bypass burst xfer SPI<=>RAM
-    mem_io_ram.wenable = mem_io_cpu.wenable;
-    mem_io_ram.addr    = mem_io_cpu.addr;
-
+    mem_io_ram.wdata   = txm_burst_read_active ? txm_burst_data
+                                               : mem_io_cpu.wdata;
+    mem_io_ram.wenable = mem_io_cpu.wenable    | txm_burst_data_available;
+    mem_io_ram.addr    = txm_burst_read_active ? txm_burst_read_dst
+                                               : mem_io_cpu.addr;
+    if (mem_io_ram.wenable & txm_burst_data_available) {
+      __display("writting %x @%x",mem_io_ram.wdata,mem_io_ram.addr);
+    }
     // track texture memory interface
-    txm.in_ready            = txm_io.in_ready;
-    txm.addr                = txm_io.addr;
+    dataAvail.valid         = txm_io.in_ready | txm_burst_read_active;
+    txm.in_ready            = txm_io.in_ready | txm_burst_read_active;
+    txm.addr                = txm_burst_read_active ? txm.addr : txm_io.addr;
     txm_io.data             = txm.rdata;
     txm_io.busy             = txm.busy;
 $$if MCH2022 then
     txm.wenable             = 0; // we never write to PSRAM
 $$end
+    // burst read
+    if (txm_burst_read_active) {
+      txm_burst_data    = txm_io.data_available ? {txm.rdata,txm_burst_data[8,24]}
+                                                : txm_burst_data;
+      txm_burst_data_cursor =
+                          txm_burst_data_available ? 5b01000 :
+                          txm_io.data_available    ? (txm_burst_data_cursor>>1)
+                                                   : txm_burst_data_cursor;
+      txm_burst_read_dst       = txm_burst_data_available
+                               ? txm_burst_read_dst + 1 : txm_burst_read_dst;
+      txm_burst_len            = txm_burst_data_available
+                               ? txm_burst_len - 1      : txm_burst_len;
+      txm_burst_read_active    = txm_burst_len != 0;
+      txm_burst_data_available = txm_burst_data_cursor[0,1];
+      /*__display("[cycle %d] BURST next:%b, data:%x, len:%d, dst:%x, txm.in_ready:%b txm.data_available:%b",
+             iter,txm_burst_data_available,txm_burst_data,
+             txm_burst_len,txm_burst_read_dst,
+             txm.in_ready,txm_io.data_available);*/
+      // if (iter > 800)              { __finish(); }
+    }
     // GPU commands
     gpu           .valid    = 0;
     cmdq          .in_add   = 0;
@@ -409,10 +442,32 @@ $$elseif not MCH2022 then
 $$end
             }
             case 2b10: { // texture memory CPU read
-              txm.addr     = prev_mem_wdata[0,24];
-              txm.in_ready = 1; // NOTE: assumes there cannot be collisions with
-                                // the texture sampler ; CPU should not drive
-                                // texture memory while draw calls are pending
+              // NOTE1: assumes there cannot be collisions with
+              //        the texture sampler ; CPU should not drive
+              //        texture memory while draw calls are pending
+              // NOTE2: CPU cannot write to RAM while the burst occurs,
+              //        and should wait on user_data, txm.busy bit
+              uint1 len_else_dst    <:: prev_mem_wdata[31,1];
+              // ^^^ bit 31 indicates whether we are setting the length (bytes)
+              // or the destination address (in ram)
+              uint1 src_and_trigger <:: prev_mem_wdata[30,1];
+              // ^^^ bit 31 indicates whether we are setting the source (in tex
+              // memory) or the destination address (in ram)
+              // Set size, then destination, then source (triggers the burst)
+              if (len_else_dst) {
+                txm_burst_len       = prev_mem_wdata[2,22];
+              } else {
+                if (~src_and_trigger) {
+                  txm_burst_read_dst  = prev_mem_wdata[0,24];
+                }
+              }
+              txm.addr              = prev_mem_wdata[0,24];
+              txm_burst_read_active = src_and_trigger; // start
+              txm_burst_data_cursor = 5b10000;
+              if (src_and_trigger) {
+                __display("[cycle %d] BURST start, from @%x to @%x, len %d",
+                    iter,txm_burst_read_dst,txm.addr,txm_burst_len);
+              }
             }
             default: { }
           }
