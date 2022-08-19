@@ -49,5 +49,5 @@ static inline unsigned char *spiflash_copy(int addr,unsigned char *dst,int len)
   *SPIFLASH = (1<<31) | len;
   *SPIFLASH = (int)dst;
   *SPIFLASH = (1<<30) | addr;
-  *LEDS=9;
+  while (spiflash_busy()) {  } // wait
 }

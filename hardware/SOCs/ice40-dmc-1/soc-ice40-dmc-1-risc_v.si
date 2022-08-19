@@ -354,12 +354,12 @@ $$end
     mem_io_cpu.rdata   = mem_io_ram.rdata;
     mem_io_ram.wdata   = txm_burst_read_active ? txm_burst_data
                                                : mem_io_cpu.wdata;
-    mem_io_ram.wenable = mem_io_cpu.wenable    | txm_burst_data_available;
+    mem_io_ram.wenable = mem_io_cpu.wenable | {4{txm_burst_data_available}};
     mem_io_ram.addr    = txm_burst_read_active ? txm_burst_read_dst
                                                : mem_io_cpu.addr;
     if (mem_io_ram.wenable & txm_burst_data_available) {
       /*if (mem_io_ram.wdata != 0)*/ {
-        __display("writting %x @%x",mem_io_ram.wdata,mem_io_ram.addr<<2);
+        __display("writing %x @%x",mem_io_ram.wdata,mem_io_ram.addr<<2);
       }
     }
     // track texture memory interface
@@ -371,6 +371,8 @@ $$end
 $$if MCH2022 then
     txm.wenable             = 0; // we never write to PSRAM
 $$end
+    // stall CPU on bursts
+    cpu.stall           = txm_burst_read_active;
     // burst read
     if (txm_burst_read_active) {
       txm_burst_data    = txm_io.data_available ? {txm.rdata,txm_burst_data[8,24]}
@@ -504,7 +506,7 @@ $$end
     // leds = {$NUM_LEDS-2$b0,cmdq.full,cmdq.empty};
 
 $$if SIMULATION then
-    // if (iter == 20000000) { __finish(); }
+    //if (iter == 140000) { __finish(); }
     iter = iter + 1;
 $$end
 
