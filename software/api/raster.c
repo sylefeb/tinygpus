@@ -1,6 +1,6 @@
 // _____________________________________________________________________________
 // |                                                                           |
-// |  A rasterizer API for the DMC-! GPU.                                      |
+// |  A rasterizer API for the DMC-1 GPU.                                      |
 // |                                                                           |
 // |                                                                           |
 // | Implements rasterization of convex faces (triangles, and more).           |
@@ -356,19 +356,26 @@ static inline void normalize(short *x, short *y, short *z)
 }
 
 // ____________________________________________________________________________
+// Computes a normal from three points
+static inline void normal_from_three_points(const p3d *p0, const p3d *p1, const p3d *p2, p3d *n)
+{
+  int d10x = p1->x - p0->x;
+  int d10y = p1->y - p0->y;
+  int d10z = p1->z - p0->z;
+  int d20x = p2->x - p0->x;
+  int d20y = p2->y - p0->y;
+  int d20z = p2->z - p0->z;
+  cross(d10x, d10y, d10z, d20x, d20y, d20z, &n->x, &n->y, &n->z);
+  normalize(&n->x, &n->y, &n->z);
+}
+
+// ____________________________________________________________________________
 // Prepares a surface from a triangle
 static inline void surface_pre(surface *s,int p0,int p1,int p2,const p3d *pts)
 {
   // compute triangle normal
-  int d10x = pts[p1].x - pts[p0].x;
-  int d10y = pts[p1].y - pts[p0].y;
-  int d10z = pts[p1].z - pts[p0].z;
-  int d20x = pts[p2].x - pts[p0].x;
-  int d20y = pts[p2].y - pts[p0].y;
-  int d20z = pts[p2].z - pts[p0].z;
   p3d n;
-  cross(d10x,d10y,d10z,    d20x,d20y,d20z,    &n.x,&n.y,&n.z);
-  normalize(&n.x,&n.y,&n.z);
+  normal_from_three_points(pts + p0, pts + p1, pts + p2, &n);
   // compute u,v from n
   cross(n.x,n.y,n.z, 256,0,0,           &s->ux,&s->uy,&s->uz);
   normalize(&s->ux,&s->uy,&s->uz);

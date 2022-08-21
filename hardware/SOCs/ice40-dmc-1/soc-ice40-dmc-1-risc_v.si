@@ -57,6 +57,7 @@ $$ICEV_MULDIV        = 1
 $$ICEV_FAST_SHIFT    = 1
 $$ICEV_USERDATA      = 1
 $$ICEV_ALU_LATCH     = 1
+$$ICEV_STALL         = 1
 $$Boot               = (1<<17)>>2  -- boot from BRAM, see bram_spram_32bits.si
 $$addrW              = 17
 //_                    ^^ 2^17 (128K) + 1 bit for BRAM + 1 bit for mapping
@@ -337,7 +338,7 @@ $$end
 
     user_data[0,24] = {
                       gpu.pickedh,
-                      txm.rdata,
+                      8b0,
 $$if BUTTONS then
                       btns[0,3],
 $$else
@@ -357,11 +358,6 @@ $$end
     mem_io_ram.wenable = mem_io_cpu.wenable | {4{txm_burst_data_available}};
     mem_io_ram.addr    = txm_burst_read_active ? txm_burst_read_dst
                                                : mem_io_cpu.addr;
-    if (mem_io_ram.wenable & txm_burst_data_available) {
-      /*if (mem_io_ram.wdata != 0)*/ {
-        __display("writing %x @%x",mem_io_ram.wdata,mem_io_ram.addr<<2);
-      }
-    }
     // track texture memory interface
     dataAvail.valid         = txm_io.in_ready | txm_burst_read_active;
     txm.in_ready            = txm_io.in_ready | txm_burst_read_active;
@@ -370,6 +366,11 @@ $$end
     txm_io.busy             = txm.busy;
 $$if MCH2022 then
     txm.wenable             = 0; // we never write to PSRAM
+$$end
+$$if SIMULATION then
+    //if ((|mem_io_ram.wenable) & txm_burst_data_available) {
+    //  __display("%d write",iter);
+    //}
 $$end
     // stall CPU on bursts
     cpu.stall           = txm_burst_read_active;
@@ -387,11 +388,6 @@ $$end
                                ? txm_burst_len - 1      : txm_burst_len;
       txm_burst_read_active    = txm_burst_len != 0;
       txm_burst_data_available = txm_burst_data_cursor[0,1];
-      /*__display("[cycle %d] BURST next:%b, data:%x, len:%d, dst:%x, txm.in_ready:%b txm.data_available:%b",
-             iter,txm_burst_data_available,txm_burst_data,
-             txm_burst_len,txm_burst_read_dst,
-             txm.in_ready,txm_io.data_available);*/
-      // if (iter > 800)              { __finish(); }
     }
     // GPU commands
     gpu           .valid    = 0;
@@ -469,10 +465,11 @@ $$end
               txm.addr              = prev_mem_wdata[0,24];
               txm_burst_read_active = src_and_trigger; // start
               txm_burst_data_cursor = 5b10000;
-              if (src_and_trigger) {
-                __display("[cycle %d] BURST start, from @%x to @%x, len %d",
-                    iter,txm.addr,txm_burst_read_dst<<2,txm_burst_len);
-              }
+$$if SIMULATION then
+              //if (src_and_trigger) {
+              //  __display("[cycle %d] BURST start, from @%x to @%x, len %d",iter,txm.addr,txm_burst_read_dst<<2,txm_burst_len);
+              //}
+$$end
             }
             default: { }
           }

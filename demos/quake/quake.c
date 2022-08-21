@@ -17,6 +17,7 @@
 int core_id() { return 0; }
 #endif
 #include "raster.c"
+#include "frustum.c"
 #include "q.h"
 
 // array of projected vertices
@@ -98,10 +99,17 @@ static inline void transform(short *x, short *y, short *z, short w)
 static inline void project(const p3d* pt, p2d *pr)
 {
   // perspective z division
-	int z     = pt->z;
+	int z     = (int)pt->z;
   int inv_z = z != 0 ? ((1 << 16) / z) : (1 << 16);
-  pr->x = ((pt->x * inv_z) >> 8) + SCREEN_WIDTH / 2;
-  pr->y = ((pt->y * inv_z) >> 8) + SCREEN_HEIGHT / 2;  
+  pr->x = (short)((((int)pt->x * inv_z) >> 8) + SCREEN_WIDTH  / 2);
+  pr->y = (short)((((int)pt->y * inv_z) >> 8) + SCREEN_HEIGHT / 2);
+}
+
+static inline void unproject(const p2d *pr,short z,p3d* pt)
+{
+  pt->x = (short)(((((int)pr->x - SCREEN_WIDTH  / 2) << 8) * (int)z) >> 16);
+  pt->y = (short)(((((int)pr->y - SCREEN_HEIGHT / 2) << 8) * (int)z) >> 16);
+  pt->z = z;
 }
 
 // -----------------------------------------------------
@@ -361,6 +369,10 @@ void main_1()
 // -----------------------------------------------------
 
 #ifndef EMUL
+
+volatile unsigned char buf8[8];
+volatile unsigned char buf12[12];
+
 unsigned short locate_leaf()
 {
   unsigned short nid = 0/*root*/;
@@ -371,19 +383,22 @@ unsigned short locate_leaf()
       return ~nid;
     }
     // get node and plane
-    t_my_node nd;
-    spiflash_copy(BSP_NODES + nid * sizeof(t_my_node), (unsigned char*)&nd, sizeof(nd));
-    t_my_plane pl;
-    spiflash_copy(BSP_PLANES + nd.plane_id * sizeof(t_my_plane), (unsigned char*)&pl, sizeof(pl));
+    // uses intermediate buffers since length of read has to be multiple of 4
+    spiflash_copy(BSP_NODES + nid * sizeof(t_my_node), buf8, sizeof(buf8));
+    volatile const t_my_node *nd  = (volatile const t_my_node *)buf8;
+    spiflash_copy(BSP_PLANES + nd->plane_id * sizeof(t_my_plane), buf12, sizeof(buf12));
+    volatile const t_my_plane *pl = (volatile const t_my_plane *)buf12;
     // compute side
-    int side = (dot3(view.x,view.y,view.z, pl.nx,pl.ny,pl.nz)>>8) - (pl.dist);
+    int side = (dot3(view.x,view.y,view.z, pl->nx,pl->ny,pl->nz)>>8) - (pl->dist);
     //                                                       ^^^
     //                                               >>8 for 256 factor
-    // printf("view %d,%d,%d nid = %d pl = %d side = %d\n", view.x, view.y, view.z, nid, nd.plane_id, side);
+    //printf("view %d,%d,%d nid = %d pl = %d side = %d\n",
+    //       view.x, view.y, view.z,
+    //       nid, nd->plane_id, side);
     if (side < 0) {
-      nid = nd.back;
+      nid = nd->back;
     } else {
-      nid = nd.front;
+      nid = nd->front;
     }
   }
   return 0;
@@ -533,6 +548,10 @@ void main_0()
     span_heads_0[i] = 0;
     span_heads_1[i] = 0;
   }
+
+  // prepare the frustum
+  frustum f;
+  frustum_pre(&f, unproject, z_clip);
 
   // --------------------------
   // render loop
