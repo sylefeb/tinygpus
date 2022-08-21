@@ -32,6 +32,10 @@ rconvex_texturing rtexs[n_faces];
 
 const int z_clip = 256; // near z clipping plane
 
+// frustum
+frustum frustum_view; // frustum in view space
+frustum frustum_trsf; // frustum transformed in world space
+
 // -----------------------------------------------------
 // Rotations
 // -----------------------------------------------------
@@ -92,8 +96,20 @@ static inline void transform(short *x, short *y, short *z, short w)
 #ifndef EMUL
   rot_y(v_angle_y, x, y, z);
   // rot_z(v_angle_y<<1, x, y, z);
-  // rot_x(sine_table[(frame<<6)&4095]>>5, x, y, z);
 #endif
+}
+
+static inline void inv_transform(short *x, short *y, short *z, short w)
+{
+#ifndef EMUL
+  // rot_z(-v_angle_y<<1, x, y, z);
+  rot_y(-v_angle_y, x, y, z);
+#endif
+  if (w != 0) {
+    *x += view.x;
+    *y += view.y;
+    *z += view.z;
+  }
 }
 
 static inline void project(const p3d* pt, p2d *pr)
@@ -316,8 +332,8 @@ void render_spans(int c, int ispan)
 #endif
 #else
     for (int j = span->ys; j <= span->ye; ++j) {
-      //pixelAt(fb, c, j)[0] = span->fid&255;
-      //pixelAt(fb, c, j)[1] = (span->fid>>8)&255;
+      pixelAt(fb, c, j)[0] = c;
+      pixelAt(fb, c, j)[1] = j;
       pixelAt(fb, c, j)[2] += 16;
     }
 #endif
@@ -422,6 +438,8 @@ static inline void render_frame()
   num_vis = 0;
 #endif
 
+  /// transform frustum in world space
+  frustum_transform(&frustum_view, inv_transform, &frustum_trsf);
   /// project vertices
 #ifdef EMUL
   project_vertices(0, n_vertices - 1);
@@ -437,8 +455,16 @@ static inline void render_frame()
   }
   /// rasterize faces
 #ifdef EMUL
-  rasterize_faces(0, n_faces);
-  rasterize_faces(1, n_faces);
+  int firstface = 0;
+  for (int l = 0; l < n_visleaves; ++l) {
+    if (frustum_aabb_overlap(&visleaves[l].box, &frustum_trsf)) {
+      rasterize_faces(firstface,   visleaves[l].numfaces);
+      rasterize_faces(firstface+1, visleaves[l].numfaces);
+    }
+    firstface += visleaves[l].numfaces;
+  }
+  //rasterize_faces(0, n_faces);
+  //rasterize_faces(1, n_faces);
 #else
   // request core 1 assistance
   core1_todo = 2;
@@ -550,8 +576,7 @@ void main_0()
   }
 
   // prepare the frustum
-  frustum f;
-  frustum_pre(&f, unproject, z_clip);
+  frustum_pre(&frustum_view, unproject, z_clip);
 
   // --------------------------
   // render loop
