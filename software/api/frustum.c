@@ -34,6 +34,11 @@ static inline void plane_from_three_points(const p3d *p0, const p3d *p1, const p
 	pl->d = - dot3(p0->x, p0->y, p0->z, pl->n.x, pl->n.y, pl->n.z) >> 8;
 }
 
+int side(const plane *pl, int x, int y, int z)
+{
+	return (dot3(x,y,z, pl->n.x, pl->n.y, pl->n.z) >> 8) + pl->d;
+}
+
 // ____________________________________________________________________________
 // Builds the frustum planes
 // not fast, meant to be computed once, planes are then transformed
@@ -80,17 +85,55 @@ void frustum_pre(
 	plane_from_three_points(near + 3, near    + 2, further + 3, f->planes + 3);
 	// -> bottom
 	plane_from_three_points(near + 0, further + 0, near    + 1, f->planes + 4);
+
+	// TEST
+	/*
+	p2d pctr = { SCREEN_WIDTH / 2,SCREEN_HEIGHT / 2 };
+	p3d ptest;
+	f_unproject(&pctr, z_clip << 2, &ptest);
+	for (int i = 0; i < 5; ++i) {
+		int s = side(f->planes + i, ptest.x, ptest.y, ptest.z);
+		printf("side: %d\n",s);
+	}
+	*/
 }
 
 // ____________________________________________________________________________
 // Transform the frustum
-void frustum_transform(const frustum *src, void (*inv_transform)(short *x, short *y, short *z, short w), frustum *trsf)
+void frustum_transform(const frustum *src, int z_clip, 
+	void (*inv_transform)(short *x, short *y, short *z, short w), 
+	void (*f_unproject)(const p2d *, short, p3d*),
+	frustum *trsf)
 {
 	for (int i = 0; i < 5; ++i) {
-		trsf->planes[i].d = src->planes[i].d;
+		// transform normal
 		trsf->planes[i].n = src->planes[i].n;
 		inv_transform(&trsf->planes[i].n.x,&trsf->planes[i].n.y,&trsf->planes[i].n.z, 0);
+		// recompute d
+		/// TODO: find something faster
+		// point on plane
+		p3d o;
+		o.x = - (src->planes[i].n.x * src->planes[i].d) >> 8;
+		o.y = - (src->planes[i].n.y * src->planes[i].d) >> 8;
+		o.z = - (src->planes[i].n.z * src->planes[i].d) >> 8;
+		// transform the point from view space to world space
+		inv_transform(&o.x, &o.y, &o.z, 1);
+		// compute distance
+		trsf->planes[i].d = - dot3(o.x, o.y, o.z, 
+			                         trsf->planes[i].n.x, trsf->planes[i].n.y, trsf->planes[i].n.z) >> 8;
 	}
+
+	/*
+	// TEST
+	p2d pctr = { SCREEN_WIDTH / 2,SCREEN_HEIGHT / 2 };
+	p3d ptest;
+	f_unproject(&pctr, z_clip << 2, &ptest);
+	inv_transform(&ptest.x, &ptest.y, &ptest.z, 1);
+	for (int i = 0; i < 5; ++i) {
+		int s = side(trsf->planes + i, ptest.x, ptest.y, ptest.z);
+		printf("side: %d\n", s);
+	}
+	*/
 }
 
 // ____________________________________________________________________________
@@ -127,15 +170,16 @@ int frustum_aabb_overlap(const aabb *bx, const frustum *f)
 {
 	const short *bv = (const short *)bx;
 	int result      = INSIDE;
-	for (int i = 0; i < 1; i++) {
+  for (int i = 0; i < 5; i++) {
 		const plane         *pl  = f->planes + i;
-		const t_np_vertices *cfg = np_vertices_lkup + np_config(&pl->n);
-		int m = - ((pl->n.x * bv[cfg->nx]) + (pl->n.y * bv[cfg->ny]) + (pl->n.z * bv[cfg->nz]))>>8;
-		if (m > -pl->d) {
+		int icfg                 = np_config(&pl->n);
+		const t_np_vertices *cfg = np_vertices_lkup + icfg;
+		int p_side = side(pl, bv[cfg->px], bv[cfg->py], bv[cfg->pz]);
+		if (p_side < 0) {
 			return OUTSIDE;
 		}
-		int n = - ((pl->n.x * bv[cfg->px]) + (pl->n.y * bv[cfg->py]) + (pl->n.z * bv[cfg->pz]))>>8;
-		if (n > -pl->d) {
+		int n_side = side(pl, bv[cfg->nx], bv[cfg->ny], bv[cfg->nz]);
+		if (n_side < 0) {
 			result = INTERSECT;
 		}
 	}

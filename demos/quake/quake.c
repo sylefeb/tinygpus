@@ -94,7 +94,7 @@ static inline void transform(short *x, short *y, short *z, short w)
     *z -= view.z;
   }
 #ifndef EMUL
-  rot_y(v_angle_y, x, y, z);
+  // rot_y(v_angle_y, x, y, z);
   // rot_z(v_angle_y<<1, x, y, z);
 #endif
 }
@@ -103,7 +103,7 @@ static inline void inv_transform(short *x, short *y, short *z, short w)
 {
 #ifndef EMUL
   // rot_z(-v_angle_y<<1, x, y, z);
-  rot_y(-v_angle_y, x, y, z);
+  // rot_y(-v_angle_y, x, y, z);
 #endif
   if (w != 0) {
     *x += view.x;
@@ -167,14 +167,14 @@ static inline void project_vertices(int first,int last)
 
 // -----------------------------------------------------
 
-void rasterize_faces(int first, int num)
+static inline void rasterize_faces(int parity, int first, int last)
 {
   p3d trsf_vertices[POLY_MAX_SZ];
   p3d face_vertices[POLY_MAX_SZ];
   p2d face_prj_vertices[POLY_MAX_SZ];
 
-  unsigned short *fptr = faces + (first<<2);
-  for (int fc = first; fc < num; fc += 2) {
+  unsigned short *fptr = faces + ((first+parity)<<2);
+  for (int fc = parity; fc < (last-first+1); fc += 2) {
     int first_idx = *(fptr++);
     int num_idx   = *(fptr++);
     int srfs_idx  = *(fptr++);
@@ -212,9 +212,9 @@ void rasterize_faces(int first, int num)
     }
     // prepare texturing info
     rconvex_texturing_pre(&trsf_surfaces[srfs_idx], transform,
-      vertices + indices[first_idx], &rtexs[fc]);
+      vertices + indices[first_idx], &rtexs[first+fc]);
     // backface? => skip
-    if (rtexs[fc].ded < 0) {
+    if (rtexs[first+fc].ded < 0) {
 #ifdef DEBUG
       ++num_culled;
 #endif
@@ -286,7 +286,7 @@ void rasterize_faces(int first, int num)
         // set span data
         span->ys = (unsigned char)rtri.ys;
         span->ye = (unsigned char)rtri.ye;
-        span->fid = fc;
+        span->fid = first+fc;
       }
     }
   }
@@ -332,8 +332,8 @@ void render_spans(int c, int ispan)
 #endif
 #else
     for (int j = span->ys; j <= span->ye; ++j) {
-      pixelAt(fb, c, j)[0] = c;
-      pixelAt(fb, c, j)[1] = j;
+      pixelAt(fb, c, j)[0] = 0;
+      pixelAt(fb, c, j)[1] = 0;
       pixelAt(fb, c, j)[2] += 16;
     }
 #endif
@@ -439,7 +439,7 @@ static inline void render_frame()
 #endif
 
   /// transform frustum in world space
-  frustum_transform(&frustum_view, inv_transform, &frustum_trsf);
+  frustum_transform(&frustum_view, z_clip, inv_transform, unproject, &frustum_trsf);
   /// project vertices
 #ifdef EMUL
   project_vertices(0, n_vertices - 1);
@@ -454,17 +454,19 @@ static inline void render_frame()
     surface_transform(&surfaces[s], &trsf_surfaces[s], transform);
   }
   /// rasterize faces
-#ifdef EMUL
+#ifdef EMUL  
   int firstface = 0;
+  int skipped   = 0;
   for (int l = 0; l < n_visleaves; ++l) {
     if (frustum_aabb_overlap(&visleaves[l].box, &frustum_trsf)) {
-      rasterize_faces(firstface,   visleaves[l].numfaces);
-      rasterize_faces(firstface+1, visleaves[l].numfaces);
+      rasterize_faces(0, firstface, firstface + visleaves[l].numfaces-1);
+      rasterize_faces(1, firstface, firstface + visleaves[l].numfaces-1);
+    } else {
+      skipped += visleaves[l].numfaces;
     }
     firstface += visleaves[l].numfaces;
   }
-  //rasterize_faces(0, n_faces);
-  //rasterize_faces(1, n_faces);
+  printf("skipped %d / %d faces\n",skipped, firstface);
 #else
   // request core 1 assistance
   core1_todo = 2;
