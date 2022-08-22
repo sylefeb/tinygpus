@@ -93,8 +93,8 @@ static inline void transform(short *x, short *y, short *z, short w)
     *y -= view.y;
     *z -= view.z;
   }
+  rot_y(v_angle_y, x, y, z);
 #ifndef EMUL
-  // rot_y(v_angle_y, x, y, z);
   // rot_z(v_angle_y<<1, x, y, z);
 #endif
 }
@@ -103,8 +103,8 @@ static inline void inv_transform(short *x, short *y, short *z, short w)
 {
 #ifndef EMUL
   // rot_z(-v_angle_y<<1, x, y, z);
-  // rot_y(-v_angle_y, x, y, z);
 #endif
+  rot_y(-v_angle_y, x, y, z);
   if (w != 0) {
     *x += view.x;
     *y += view.y;
@@ -137,7 +137,7 @@ typedef struct s_span {
   unsigned short next; // span pos in span_pool
 } t_span;
 
-#define MAX_NUM_SPANS 11000
+#define MAX_NUM_SPANS 10000
 t_span         span_pool   [MAX_NUM_SPANS];
 unsigned short span_heads_0[SCREEN_WIDTH]; // span pos in span_pool
 unsigned short span_heads_1[SCREEN_WIDTH]; // span pos in span_pool
@@ -167,19 +167,18 @@ static inline void project_vertices(int first,int last)
 
 // -----------------------------------------------------
 
-static inline void rasterize_faces(int parity, int first, int last)
+static inline void rasterize_faces(int first, int last)
 {
   p3d trsf_vertices[POLY_MAX_SZ];
   p3d face_vertices[POLY_MAX_SZ];
   p2d face_prj_vertices[POLY_MAX_SZ];
 
-  unsigned short *fptr = faces + ((first+parity)<<2);
-  for (int fc = parity; fc < (last-first+1); fc += 2) {
+  unsigned short *fptr = faces + (first<<2);
+  for (int fc = first; fc <= last; ++fc) {
     int first_idx = *(fptr++);
     int num_idx   = *(fptr++);
     int srfs_idx  = *(fptr++);
     int tex_id    = *(fptr++);
-    fptr += 4;
     // check vertices for clipping
     int *idx  = indices + first_idx;
     int n_clipped = 0;
@@ -212,9 +211,9 @@ static inline void rasterize_faces(int parity, int first, int last)
     }
     // prepare texturing info
     rconvex_texturing_pre(&trsf_surfaces[srfs_idx], transform,
-      vertices + indices[first_idx], &rtexs[first+fc]);
+      vertices + indices[first_idx], &rtexs[fc]);
     // backface? => skip
-    if (rtexs[first+fc].ded < 0) {
+    if (rtexs[fc].ded < 0) {
 #ifdef DEBUG
       ++num_culled;
 #endif
@@ -286,7 +285,7 @@ static inline void rasterize_faces(int parity, int first, int last)
         // set span data
         span->ys = (unsigned char)rtri.ys;
         span->ye = (unsigned char)rtri.ye;
-        span->fid = first+fc;
+        span->fid = fc;
       }
     }
   }
@@ -345,6 +344,24 @@ void render_spans(int c, int ispan)
 
 // -----------------------------------------------------
 
+void render_leaves(int parity)
+{
+  int skipped = 0;
+  for (int l = parity; l < n_visleaves; l+=2) {
+    if (frustum_aabb_overlap(&visleaves[l].box, &frustum_trsf)) {
+      rasterize_faces(visleaves[l].firstface, visleaves[l+1].firstface-1 );
+      //                                                ^^^ there is one last to avoid testing
+    } else {
+      skipped += visleaves[l + 1].firstface - visleaves[l].firstface;
+    }
+  }
+#ifdef EMUL
+  printf("skipped %d faces\n", skipped);
+#endif
+}
+
+// -----------------------------------------------------
+
 volatile int core1_todo;
 volatile int core1_done;
 
@@ -371,9 +388,9 @@ void main_1()
     while (core1_todo != 2) {}
     core1_todo = 0;
     core1_done = 0;
-    // rasterize the other half of the faces
+    // render the other half of the leaves
     //*LEDS = 2;
-    rasterize_faces(1, n_faces);
+    render_leaves(1);
     //*LEDS = 0;
     // sync
     core1_done = 2;
@@ -454,23 +471,13 @@ static inline void render_frame()
     surface_transform(&surfaces[s], &trsf_surfaces[s], transform);
   }
   /// rasterize faces
-#ifdef EMUL  
-  int firstface = 0;
-  int skipped   = 0;
-  for (int l = 0; l < n_visleaves; ++l) {
-    if (frustum_aabb_overlap(&visleaves[l].box, &frustum_trsf)) {
-      rasterize_faces(0, firstface, firstface + visleaves[l].numfaces-1);
-      rasterize_faces(1, firstface, firstface + visleaves[l].numfaces-1);
-    } else {
-      skipped += visleaves[l].numfaces;
-    }
-    firstface += visleaves[l].numfaces;
-  }
-  printf("skipped %d / %d faces\n",skipped, firstface);
+#ifdef EMUL
+  render_leaves(0);
+  render_leaves(1);
 #else
   // request core 1 assistance
   core1_todo = 2;
-  rasterize_faces(0, n_faces);
+  render_leaves(0);
   while (core1_done != 2) {} // wait for core 1
 #endif
 
@@ -586,7 +593,11 @@ void main_0()
 #ifndef EMUL
   view.y     += 16; // move up a bit
 #endif
-  v_angle_y   = 0;
+#ifdef EMUL
+  v_angle_y += 64;
+#else
+  v_angle_y = 0;
+#endif
   int v_start = view.z - 1000;
   int v_end   = view.z + 2100;
   int v_step  = 1;
