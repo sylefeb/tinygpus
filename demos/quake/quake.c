@@ -6,6 +6,8 @@
 // | @sylefeb 2022-08-15  licence: GPL v3, see full text in repo               |
 // |___________________________________________________________________________|
 
+#pragma pack(1)
+
 #define SCREEN_WIDTH  320
 #define SCREEN_HEIGHT 240
 
@@ -15,17 +17,23 @@
 #else
 #include <stdlib.h>
 int core_id() { return 0; }
+int time()    { return 0; }
 #endif
 #include "raster.c"
 #include "frustum.c"
 #include "q.h"
 
+// array of texturing data
+#define MAX_RASTER_FACES 1024
+rconvex_texturing rtexs[MAX_RASTER_FACES];
+unsigned char     srf_tex_nfo[MAX_RASTER_FACES * 2];
 // array of projected vertices
-p2d               prj_vertices[n_vertices];
+#define MAX_PRJ_VERTICES 256
+p2d prj_vertices[MAX_PRJ_VERTICES];
+// raster face ids within frame
+int rface_next_id;
 // array of transformed surfaces
-trsf_surface      trsf_surfaces[n_surfaces];
-// array of textrung data
-rconvex_texturing rtexs[n_faces];
+trsf_surface trsf_surfaces[n_surfaces];
 
 // #define DEBUG
 // ^^^^^^^^^^^^ uncomment to get profiling info over UART
@@ -35,6 +43,10 @@ const int z_clip = 256; // near z clipping plane
 // frustum
 frustum frustum_view; // frustum in view space
 frustum frustum_trsf; // frustum transformed in world space
+
+unsigned short vislist[n_max_vislen]; // stores the current vislist
+
+int memchunk[1024]; // a memory chunk to load data in and work with
 
 // -----------------------------------------------------
 // Rotations
@@ -148,7 +160,7 @@ volatile unsigned short span_alloc_1;
 const int face_indices[POLY_MAX_SZ] = { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15 };
 
 // -----------------------------------------------------
-
+#if 0
 static inline void project_vertices(int first,int last)
 {
   // project vertices
@@ -164,10 +176,10 @@ static inline void project_vertices(int first,int last)
     }
   }
 }
-
+#endif
 // -----------------------------------------------------
-
-static inline void rasterize_faces(int first, int last)
+#if 0
+static inline void rasterize_leaf(int leaf)
 {
   p3d trsf_vertices[POLY_MAX_SZ];
   p3d face_vertices[POLY_MAX_SZ];
@@ -291,9 +303,10 @@ static inline void rasterize_faces(int first, int last)
   }
 
 }
+#endif
 
 // -----------------------------------------------------
-
+#if 1
 void render_spans(int c, int ispan)
 {
   while (ispan) {
@@ -308,8 +321,8 @@ void render_spans(int c, int ispan)
     // bind the surface to the rasterizer
     rconvex_texturing_bind(&rtexs[span->fid]);
     // setup the surface span parameters
-    int sid = faces[(span->fid << 2) + 2];
-    int tid = faces[(span->fid << 2) + 3];
+    int sid = srf_tex_nfo[(span->fid << 1) + 0];
+    int tid = srf_tex_nfo[(span->fid << 1) + 1];
     int dr = surface_setup_span(&trsf_surfaces[sid], rx, ry, rz);
 #ifndef EMUL
 #ifdef DEBUG
@@ -341,9 +354,9 @@ void render_spans(int c, int ispan)
   }
 
 }
-
+#endif
 // -----------------------------------------------------
-
+#if 0
 void render_leaves(int parity)
 {
   int skipped = 0;
@@ -359,7 +372,7 @@ void render_leaves(int parity)
   printf("skipped %d faces\n", skipped);
 #endif
 }
-
+#endif
 // -----------------------------------------------------
 
 volatile int core1_todo;
@@ -367,6 +380,7 @@ volatile int core1_done;
 
 void main_1()
 {
+#if 0
 #ifndef EMUL
   core1_todo = 0;
   core1_done = 0;
@@ -397,14 +411,14 @@ void main_1()
 
   }
 #endif
+#endif
+  while (1) {}
 }
 
 // -----------------------------------------------------
 
-#ifndef EMUL
-
-volatile unsigned char buf8[8];
-volatile unsigned char buf12[12];
+volatile int buf8[2];
+volatile int buf12[3];
 
 unsigned short locate_leaf()
 {
@@ -417,9 +431,9 @@ unsigned short locate_leaf()
     }
     // get node and plane
     // uses intermediate buffers since length of read has to be multiple of 4
-    spiflash_copy(BSP_NODES + nid * sizeof(t_my_node), buf8, sizeof(buf8));
+    spiflash_copy(o_bsp_nodes + nid * sizeof(t_my_node), buf8, sizeof(buf8));
     volatile const t_my_node *nd  = (volatile const t_my_node *)buf8;
-    spiflash_copy(BSP_PLANES + nd->plane_id * sizeof(t_my_plane), buf12, sizeof(buf12));
+    spiflash_copy(o_bsp_planes + nd->plane_id * sizeof(t_my_plane), buf12, sizeof(buf12));
     volatile const t_my_plane *pl = (volatile const t_my_plane *)buf12;
     // compute side
     int side = (dot3(view.x,view.y,view.z, pl->nx,pl->ny,pl->nz)>>8) - (pl->dist);
@@ -436,7 +450,264 @@ unsigned short locate_leaf()
   }
   return 0;
 }
+
+// -----------------------------------------------------
+
+int readLeafVisList(int leaf)
+{
+  int offset = o_leaves[leaf];
+  volatile int start;
+  spiflash_copy(offset + 6 * sizeof(short), &start, sizeof(int));
+  volatile int len;
+  spiflash_copy(offset + 6 * sizeof(short) + sizeof(int), &len, sizeof(int));
+  printf("leaf %d offs %d vis list: %d,%d\n", leaf, offset, start, len);
+  // read the entire list in local memory
+  spiflash_copy(o_vislist + start * sizeof(short), (volatile int*)vislist, len * sizeof(short));
+  // for (int i = 0; i < len; ++i) { printf("%d,", vislist[i]); } printf("\n");
+  // now read all bboxes
+  volatile unsigned char *dst = (unsigned char *)memchunk;
+  for (int i = 0; i < len; ++i) {
+    spiflash_copy(o_leaves[vislist[i]], (volatile int *)dst, sizeof(short)*6 );
+    dst += sizeof(short) * 6;
+  }
+  return len;
+}
+
+// -----------------------------------------------------
+
+void frustumTest(int len)
+{
+  int num_culled  = 0;
+  int num_visible = 0;
+  const aabb *bx = (const aabb *)memchunk;
+  for (int i = 0; i < len; ++i) {
+    if (!frustum_aabb_overlap(bx, &frustum_trsf)) {
+      vislist[i] = 65535; // tag as not visible
+      ++num_culled;
+    } else {
+      ++num_visible;
+    }
+    ++bx;
+  }
+  printf("culled: %d visible: %d\n", num_culled,num_visible);
+}
+
+// -----------------------------------------------------
+
+void getLeaf(int leaf,volatile int **p_dst)
+{
+  int offset = o_leaves[leaf] + sizeof(short) * 6 + sizeof(int) * 2;
+  //                            ^^^ bbox            ^^^ vis start,len
+  int length = o_leaves[leaf + 1] - offset;
+  if (length & 3) { // ensures we get the last bytes
+    length += 4;
+  }
+  printf("reading leaf %d from %d len %d\n",leaf,offset,length);
+  spiflash_copy(offset, *p_dst, length);
+  *p_dst += length;
+}
+
+// -----------------------------------------------------
+
+void renderLeaf(const unsigned char *ptr)
+{
+  if (ptr == 0) return;
+  // num vertices
+  int numv = *(const int*)ptr;
+  ptr += sizeof(int);
+  printf("leaf has %d vertices.\n",numv);
+  // project vertices
+  const p3d *vertices = (const p3d *)ptr;
+  ptr += numv * sizeof(p3d);
+  for (int v = 0; v < numv; ++v) {
+    p3d p = vertices[v];
+    transform(&p.x, &p.y, &p.z, 1);
+    if (p.z >= z_clip) {
+      // project
+      project(&p, &prj_vertices[v]);
+    } else {
+      // tag as clipped
+      prj_vertices[v].x = 0x7FFF;
+    }
+  }
+  // rasterize faces
+  p3d trsf_vertices[POLY_MAX_SZ];
+  p3d face_vertices[POLY_MAX_SZ];
+  p2d face_prj_vertices[POLY_MAX_SZ];
+  // num faces
+  int numf = *(const int*)ptr;
+  ptr += sizeof(int);
+  printf("leaf has %d faces.\n", numf);
+  const unsigned short *faces   = (const unsigned short *)ptr;
+  ptr += numf * sizeof(short) * 4; // 4 shorts per face
+  // face indices
+  const int *indices = (const int*)ptr;
+  // go through faces
+  const unsigned short *fptr = faces;
+  for (int f = 0; f < numf; ++f) {
+    int fc        = rface_next_id++;
+    if (fc > MAX_RASTER_FACES) {
+      return;
+    }
+    int first_idx = *(fptr++);
+    int num_idx   = *(fptr++);
+    int srfs_idx  = *(fptr++);
+    int tex_id    = *(fptr++);
+    // check vertices for clipping
+    const int *idx = indices + first_idx;
+    int n_clipped  = 0;
+    int max_x = -2147483647; int max_y = -2147483647;
+    int min_x = 2147483647; int min_y = 2147483647;
+    for (int v = 0; v < num_idx; ++v) {
+      p2d p = prj_vertices[*(idx++)];
+      if (p.x == 0x7FFF) {
+        ++n_clipped;
+      } else {
+        if (p.x > max_x) { max_x = p.x; }
+        if (p.x < min_x) { min_x = p.x; }
+        if (p.y > max_y) { max_y = p.y; }
+        if (p.y < min_y) { min_y = p.y; }
+      }
+    }
+    // all clipped => skip
+    if (n_clipped == num_idx) {
+#ifdef DEBUG
+      ++num_culled;
 #endif
+      continue;
+    }
+    // out of bounds => skip
+    if (min_x >= SCREEN_WIDTH || max_x <= 0 || min_y >= SCREEN_HEIGHT || max_y <= 0) {
+#ifdef DEBUG
+      ++num_culled;
+#endif
+      continue;
+    }
+    // prepare texturing info
+    rconvex_texturing_pre(&trsf_surfaces[srfs_idx], transform,
+      vertices + indices[first_idx], &rtexs[fc]);
+    // backface? => skip
+    if (rtexs[fc].ded < 0) {
+      --rface_next_id; // free up slot
+#ifdef DEBUG
+      ++num_culled;
+#endif
+      continue;
+    }
+    // surface and texture info
+    srf_tex_nfo[(fc << 1) + 0] = srfs_idx;
+    srf_tex_nfo[(fc << 1) + 1] = tex_id;
+    // clip?
+    const int *ptr_indices;
+    const p2d *ptr_prj_vertices;
+    if (n_clipped == 0) {
+      // no clipping required
+      ptr_indices = indices + first_idx;
+      ptr_prj_vertices = prj_vertices;
+    } else {
+#ifdef DEBUG
+      ++num_clipped;
+#endif
+      // clip the face
+      // -> transform vertices
+      const int *idx = indices + first_idx;
+      p3d *v_dst = trsf_vertices;
+      for (int v = 0; v < POLY_MAX_SZ && v < num_idx; ++v) {
+        //            ^^^^^^ encourages unrolling?
+        p3d p = vertices[*(idx++)];
+        transform(&p.x, &p.y, &p.z, 1);
+        *(v_dst++) = p;
+      }
+      // -> clip
+      int n_clipped = 0;
+      clip_polygon(z_clip,
+        trsf_vertices, num_idx,
+        face_vertices, &n_clipped);
+#ifdef EMUL
+      if (n_clipped >= POLY_MAX_SZ) {
+        printf("############# poly clip overflow");
+        exit(-1);
+      }
+#endif
+      // -> project clipped vertices
+      for (int v = 0; v < n_clipped; ++v) {
+        project(&face_vertices[v], &face_prj_vertices[v]);
+      }
+      // use clipped polygon
+      ptr_indices = face_indices;
+      ptr_prj_vertices = face_prj_vertices;
+      num_idx = n_clipped;
+    }
+#ifdef DEBUG
+    ++num_vis;
+#endif
+    // rasterize the face into spans
+    rconvex rtri;
+    rconvex_init(&rtri, num_idx, ptr_indices, ptr_prj_vertices);
+    for (int c = rtri.x; c <= rtri.last_x; ++c) {
+      rconvex_step(&rtri, num_idx, ptr_indices, ptr_prj_vertices);
+      // insert span
+      if (span_alloc_0 + (MAX_NUM_SPANS - span_alloc_1) + 1 < MAX_NUM_SPANS && rtri.ys < rtri.ye) {
+        // insert span record
+        t_span *span;
+        if (core_id() == 0) {
+          int ispan = ++span_alloc_0; // span 0 unused, tags empty
+          span = span_pool + ispan;
+          span->next = span_heads_0[c];
+          span_heads_0[c] = ispan;
+        } else {
+          int ispan = --span_alloc_1;
+          span = span_pool + ispan;
+          span->next = span_heads_1[c];
+          span_heads_1[c] = ispan;
+        }
+        // set span data
+        span->ys = (unsigned char)rtri.ys;
+        span->ye = (unsigned char)rtri.ye;
+        span->fid = fc;
+      }
+    }
+  }
+}
+
+// -----------------------------------------------------
+
+void renderLeaves(int len)
+{
+  int next = 0;
+  while (next < len) {
+    volatile int *dst = memchunk;
+    // read a first leaf
+    int *first = 0;
+    while (next < len) {
+      if (vislist[next] < 65535) {
+        first = (int*)dst;
+        getLeaf(vislist[next], &dst);
+        break;
+      }
+      ++next;
+    }
+    ++next;
+    // read a second leaf
+    /*
+    int *second = 0;
+    while (next < len) {
+      if (vislist[next] < 65535) {
+        second = (int*)dst;
+        getLeaf(vislist[next], &dst);
+        break;
+      }
+      ++next;
+    }
+    */
+    // render leaves
+    renderLeaf((const unsigned char*)first);
+    // renderLeaf((const unsigned char*)second);
+    printf("%d bytes\n", (int)dst - (int)memchunk);
+    printf("%d spans\n", span_alloc_0 + (MAX_NUM_SPANS - span_alloc_1));
+    printf("%d rfaces\n", rface_next_id);
+  }
+}
 
 // -----------------------------------------------------
 
@@ -444,6 +715,8 @@ unsigned short locate_leaf()
 // runs on core 0, core 1 assists
 static inline void render_frame()
 {
+  // reset rface ids
+  rface_next_id = 0;
   // reset spans
   span_alloc_0 = 0;
   span_alloc_1 = MAX_NUM_SPANS;
@@ -455,8 +728,31 @@ static inline void render_frame()
   num_vis = 0;
 #endif
 
+#ifndef EMUL
+  // ---- wait for previous frame to be done
+  wait_all_drawn();
+  // ---- now can access texture memory
+#endif
+
   /// transform frustum in world space
   frustum_transform(&frustum_view, z_clip, inv_transform, unproject, &frustum_trsf);
+  /// transform surfaces
+  for (int s = 0; s < n_surfaces; ++s) {
+    surface_transform(&surfaces[s], &trsf_surfaces[s], transform);
+  }
+  /// locate current leaf
+  unsigned int tm_loc = time();
+  unsigned short leaf = locate_leaf();
+  unsigned int took   = time() - tm_loc;
+  printf("view %d,%d,%d in leaf %d (took %d cycles)\n", view.x, view.y, view.z, leaf, took);
+  /// get visibility list
+  int len = readLeafVisList(leaf);
+  /// check frustum - aabb
+  frustumTest(len);
+  /// render visible leaves
+  renderLeaves(len);
+  
+#if 0
   /// project vertices
 #ifdef EMUL
   project_vertices(0, n_vertices - 1);
@@ -480,25 +776,12 @@ static inline void render_frame()
   render_leaves(0);
   while (core1_done != 2) {} // wait for core 1
 #endif
-
-#ifdef EMUL
-  printf("%d spans\n", span_alloc_0 + (MAX_NUM_SPANS - span_alloc_1));
 #endif
+
+  printf("%d spans\n", span_alloc_0 + (MAX_NUM_SPANS - span_alloc_1));
 
 #ifdef DEBUG
   unsigned int tm_2 = time();
-#endif
-
-#ifndef EMUL
-  // before drawing cols wait for previous frame
-  wait_all_drawn();
-
-  // NOTE: here we can access SPI-flash
-  unsigned int tm_loc = time();
-  unsigned short leaf = locate_leaf();
-  unsigned int took = time() - tm_loc;
-  printf("view %d,%d,%d in leaf %d (took %d cycles)\n", view.x, view.y, view.z, leaf, took);
-
 #endif
 
 #ifdef DEBUG
@@ -507,6 +790,7 @@ static inline void render_frame()
   tm_srfspan = 0;
 #endif
 
+#if 1
   /// render the spans
   for (int c = 0; c < SCREEN_WIDTH; ++c) {
 
@@ -551,6 +835,8 @@ static inline void render_frame()
   printf("(cycles) raster %d, wait %d, spans %d, colprocess %d, srfspan %d [tot %d]\n",
      tm_2-tm_1, tm_3-tm_2, tm_4-tm_3, tm_colprocess, tm_srfspan, tm_4-tm_1);
   printf("num spans %d, faces: num vis %d, clipped %d, culled %d\n", span_alloc_0 + (MAX_NUM_SPANS - span_alloc_1),num_vis,num_clipped,num_culled);
+#endif
+
 #endif
 
 }
