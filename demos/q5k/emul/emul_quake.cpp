@@ -13,7 +13,7 @@
 t_image_nfo *fb;
 uchar *pixelAt(t_image_nfo *img, int i, int j);
 
-#include "../quake.c"
+#include "../q5k.c"
 
 /* -------------------------------------------------------- */
 

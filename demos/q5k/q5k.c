@@ -37,10 +37,10 @@ volatile int rface_next_id_1;
 // array of transformed surfaces
 trsf_surface trsf_surfaces[n_surfaces];
 
-// #define DEBUG
+#define DEBUG
 // ^^^^^^^^^^^^ uncomment to get profiling info over UART
 
-const int z_clip = 256; // near z clipping plane
+const int z_clip = 128; // near z clipping plane
 
 // frustum
 frustum frustum_view; // frustum in view space
@@ -162,7 +162,7 @@ volatile unsigned short span_alloc_1;
 const int face_indices[POLY_MAX_SZ] = { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15 };
 
 // -----------------------------------------------------
-#if 1
+
 void render_spans(int c, int ispan)
 {
   while (ispan) {
@@ -180,7 +180,6 @@ void render_spans(int c, int ispan)
     int sid = srf_tex_nfo[(span->fid << 1) + 0];
     int tid = srf_tex_nfo[(span->fid << 1) + 1];
     int dr = surface_setup_span(&trsf_surfaces[sid], rx, ry, rz);
-#ifndef EMUL
 #ifdef DEBUG
     tm_srfspan += time() - tm_ss;
 #endif
@@ -198,19 +197,12 @@ void render_spans(int c, int ispan)
 #ifdef DEBUG
     tm_colprocess += time() - tm_cp;
 #endif
-#else
-    for (int j = span->ys; j <= span->ye; ++j) {
-      pixelAt(fb, c, j)[0] = 0;
-      pixelAt(fb, c, j)[1] = 0;
-      pixelAt(fb, c, j)[2] += 16;
-    }
-#endif
     // next span
     ispan = span->next;
   }
 
 }
-#endif
+
 // -----------------------------------------------------
 
 void renderLeaf(int core,const unsigned char *ptr);
@@ -239,11 +231,10 @@ void main_1()
 
 // -----------------------------------------------------
 
-volatile int buf8[2];
-volatile int buf12[3];
-
 unsigned short locate_leaf()
 {
+  volatile int buf20[5];
+  volatile int buf12[3];
   unsigned short nid = 0/*root*/;
   while (1) {
     // reached a leaf?
@@ -253,8 +244,8 @@ unsigned short locate_leaf()
     }
     // get node and plane
     // uses intermediate buffers since length of read has to be multiple of 4
-    spiflash_copy(o_bsp_nodes + nid * sizeof(t_my_node), buf8, sizeof(buf8));
-    volatile const t_my_node *nd  = (volatile const t_my_node *)buf8;
+    spiflash_copy(o_bsp_nodes + nid * sizeof(t_my_node), buf20, sizeof(buf20));
+    volatile const t_my_node *nd  = (volatile const t_my_node *)buf20;
     spiflash_copy(o_bsp_planes + nd->plane_id * sizeof(t_my_plane), buf12, sizeof(buf12));
     volatile const t_my_plane *pl = (volatile const t_my_plane *)buf12;
     // compute side
@@ -422,7 +413,7 @@ void renderLeaf(int core,const unsigned char *ptr)
       continue;
     }
     // prepare texturing info
-    rconvex_texturing_pre(&trsf_surfaces[srfs_idx], transform,
+    rconvex_texturing_pre_uv_origin(&trsf_surfaces[srfs_idx], transform,
       vertices + indices[first_idx], &rtexs[fc]);
     // backface? => skip
     if (rtexs[fc].ded < 0) {
@@ -564,17 +555,15 @@ static inline void render_frame()
   span_alloc_0 = 0;
   span_alloc_1 = MAX_NUM_SPANS;
 
-#ifdef DEBUG
-  unsigned int tm_1 = time();
-  num_clipped = 0;
-  num_culled = 0;
-  num_vis = 0;
-#endif
-
-#ifndef EMUL
   // ---- wait for previous frame to be done
   wait_all_drawn();
   // ---- now can access texture memory
+
+#ifdef DEBUG
+  unsigned int tm_0 = time();
+  num_clipped = 0;
+  num_culled = 0;
+  num_vis = 0;
 #endif
 
   /// transform frustum in world space
@@ -583,26 +572,30 @@ static inline void render_frame()
   for (int s = 0; s < n_surfaces; ++s) {
     surface_transform(&surfaces[s], &trsf_surfaces[s], transform);
   }
+#ifdef DEBUG
+  unsigned int tm_1 = time();
+#endif
   /// locate current leaf
-  unsigned int tm_loc = time();
   unsigned short leaf = locate_leaf();
-  unsigned int took   = time() - tm_loc;
-  // printf("view %d,%d,%d in leaf %d (took %d cycles)\n", view.x, view.y, view.z, leaf, took);
+  // printf("view %d,%d,%d in leaf %d\n", view.x, view.y, view.z, leaf);
   /// get visibility list
-  int len = readLeafVisList(leaf);
-  /// check frustum - aabb
-  frustumTest(len);
-  /// render visible leaves
-  renderLeaves(len);
-
-  //printf("%d spans\n", span_alloc_0 + (MAX_NUM_SPANS - span_alloc_1));
-
 #ifdef DEBUG
   unsigned int tm_2 = time();
 #endif
-
+  int len = readLeafVisList(leaf);
+  /// check frustum - aabb
 #ifdef DEBUG
   unsigned int tm_3 = time();
+#endif
+  frustumTest(len);
+  /// render visible leaves
+#ifdef DEBUG
+  unsigned int tm_4 = time();
+#endif
+  renderLeaves(len);
+
+#ifdef DEBUG
+  unsigned int tm_5 = time();
   tm_colprocess = 0;
   tm_srfspan = 0;
 #endif
@@ -644,10 +637,9 @@ static inline void render_frame()
   }
 
 #ifdef DEBUG
-  unsigned int tm_4 = time();
-  printf("(cycles) raster %d, wait %d, spans %d, colprocess %d, srfspan %d [tot %d]\n",
-     tm_2-tm_1, tm_3-tm_2, tm_4-tm_3, tm_colprocess, tm_srfspan, tm_4-tm_1);
-  printf("num spans %d, faces: num vis %d, clipped %d, culled %d\n", span_alloc_0 + (MAX_NUM_SPANS - span_alloc_1),num_vis,num_clipped,num_culled);
+  unsigned int tm_6 = time();
+  printf("trsf %d, loc %d, vis %d, vfc %d, render %d, spans %d (cols %d, srf %d)\n",
+    tm_1 - tm_0, tm_2 - tm_1, tm_3 - tm_2, tm_4 - tm_3, tm_5 - tm_4, tm_6 - tm_5, tm_colprocess, tm_srfspan);
 #endif
 
 }
@@ -719,6 +711,8 @@ void main_0()
     int speed = (elapsed >> 17);
 
     prev_uart_byte = uart_byte();
+    p3d front = { 0,0,256 };
+    inv_transform(&front.x, &front.y, &front.z, 0);
     if (prev_uart_byte == 'a') {
       v_angle_y += speed<<1;
     }
@@ -742,6 +736,9 @@ void main_0()
     }
     if (prev_uart_byte == 'Z') {
       view.z -= speed;
+    }
+    if (prev_uart_byte == 'w') {
+      view.x += front.x; view.y += front.y; view.z += front.z;
     }
 
 #if 0

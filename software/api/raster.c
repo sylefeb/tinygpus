@@ -403,7 +403,6 @@ static inline void surface_transform(const surface *s,trsf_surface *ts,
 
 // ____________________________________________________________________________
 // Prepares texturing info for a rconvex
-
 static inline void rconvex_texturing_pre(
                                      const trsf_surface *ts, f_transform trsf,
                                      const p3d *p0, rconvex_texturing *rtex)
@@ -420,6 +419,29 @@ static inline void rconvex_texturing_pre(
   if (rtex->ded > 0) {
     rtex->u_offs = - rtex->u_offs;
     rtex->v_offs = - rtex->v_offs;
+  }
+}
+
+// ____________________________________________________________________________
+// Same as above using the origin as a global uv reference
+static inline void rconvex_texturing_pre_uv_origin(
+  const trsf_surface *ts, f_transform trsf,
+  const p3d *p0, rconvex_texturing *rtex)
+{
+  // transform p0 (reference point for the transformed surface)
+  p3d trp0 = *p0;
+  trsf(&trp0.x, &trp0.y, &trp0.z, 1);
+  p3d o = { 0,0,0 };
+  trsf(&o.x, &o.y, &o.z, 1);
+  // uv translation: translate so that p0 uv coordinates remain (0,0)
+  rtex->u_offs = dot3(o.x, o.y, o.z, ts->ux, ts->uy, ts->uz);
+  rtex->v_offs = dot3(o.x, o.y, o.z, ts->vx, ts->vy, ts->vz);
+  // plane distance
+  rtex->ded = dot3(trp0.x, trp0.y, trp0.z, ts->nx, ts->ny, ts->nz) >> 8;
+  // NOTE: ded < 0 ==> backface surface
+  if (rtex->ded > 0) {
+    rtex->u_offs = -rtex->u_offs;
+    rtex->v_offs = -rtex->v_offs;
   }
 }
 
