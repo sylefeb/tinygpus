@@ -24,14 +24,16 @@ int time()    { return 0; }
 #include "q.h"
 
 // array of texturing data
-#define MAX_RASTER_FACES 1024
+#define MAX_RASTER_FACES 512
 rconvex_texturing rtexs[MAX_RASTER_FACES];
 unsigned char     srf_tex_nfo[MAX_RASTER_FACES * 2];
 // array of projected vertices
-#define MAX_PRJ_VERTICES 256
-p2d prj_vertices[MAX_PRJ_VERTICES];
+#define MAX_PRJ_VERTICES 128
+p2d prj_vertices_0[MAX_PRJ_VERTICES];
+p2d prj_vertices_1[MAX_PRJ_VERTICES];
 // raster face ids within frame
-int rface_next_id;
+volatile int rface_next_id_0;
+volatile int rface_next_id_1;
 // array of transformed surfaces
 trsf_surface trsf_surfaces[n_surfaces];
 
@@ -46,7 +48,7 @@ frustum frustum_trsf; // frustum transformed in world space
 
 unsigned short vislist[n_max_vislen]; // stores the current vislist
 
-int memchunk[4096]; // a memory chunk to load data in and work with
+int memchunk[3192]; // a memory chunk to load data in and work with
 
 // -----------------------------------------------------
 // Rotations
@@ -210,32 +212,14 @@ void render_spans(int c, int ispan)
 }
 #endif
 // -----------------------------------------------------
-#if 0
-void render_leaves(int parity)
-{
-  int skipped = 0;
-  for (int l = parity; l < n_visleaves; l+=2) {
-    if (frustum_aabb_overlap(&visleaves[l].box, &frustum_trsf)) {
-      rasterize_faces(visleaves[l].firstface, visleaves[l+1].firstface-1 );
-      //                                                ^^^ there is one last to avoid testing
-    } else {
-      skipped += visleaves[l + 1].firstface - visleaves[l].firstface;
-    }
-  }
-#ifdef EMUL
-  printf("skipped %d faces\n", skipped);
-#endif
-}
-#endif
-// -----------------------------------------------------
+
+void renderLeaf(int core,const unsigned char *ptr);
 
 volatile int core1_todo;
 volatile int core1_done;
 
 void main_1()
 {
-#if 0
-#ifndef EMUL
   core1_todo = 0;
   core1_done = 0;
 
@@ -244,29 +228,13 @@ void main_1()
     // wait for the order
     while (core1_todo != 1) {}
     core1_todo = 0;
-    core1_done = 0;
-    // project the other half of the vertices
-    //*LEDS = 1;
-    project_vertices(n_vertices / 2, n_vertices - 1);
-    //*LEDS = 0;
+    // render the other leaf
+    renderLeaf(1,(const unsigned char*)memchunk);
     // sync
     core1_done = 1;
 
-    // wait for the order
-    while (core1_todo != 2) {}
-    core1_todo = 0;
-    core1_done = 0;
-    // render the other half of the leaves
-    //*LEDS = 2;
-    render_leaves(1);
-    //*LEDS = 0;
-    // sync
-    core1_done = 2;
-
   }
-#endif
-#endif
-  while (1) {}
+
 }
 
 // -----------------------------------------------------
@@ -363,9 +331,16 @@ void getLeaf(int leaf,volatile int **p_dst)
 
 // -----------------------------------------------------
 
-void renderLeaf(const unsigned char *ptr)
+void renderLeaf(int core,const unsigned char *ptr)
 {
   if (ptr == 0) return;
+  // select temporary table
+  p2d *prj_vertices;
+  if (core == 0) {
+    prj_vertices = prj_vertices_0;
+  } else {
+    prj_vertices = prj_vertices_1;
+  }
   // num vertices
   int numv = *(const int*)ptr;
   ptr += sizeof(int);
@@ -399,8 +374,13 @@ void renderLeaf(const unsigned char *ptr)
   // go through faces
   const unsigned short *fptr = faces;
   for (int f = 0; f < numf; ++f) {
-    int fc        = rface_next_id++;
-    if (fc == MAX_RASTER_FACES) {
+    int fc;
+    if (core == 0) {
+      fc = rface_next_id_0++;
+    } else {
+      fc = --rface_next_id_1;
+    }
+    if (rface_next_id_0 >= rface_next_id_1) {
       return;
     }
     int first_idx = *(fptr++);
@@ -428,6 +408,8 @@ void renderLeaf(const unsigned char *ptr)
 #ifdef DEBUG
       ++num_culled;
 #endif
+      // free up slot
+      if (core == 0) { --rface_next_id_0; } else { ++rface_next_id_1; }
       continue;
     }
     // out of bounds => skip
@@ -435,6 +417,8 @@ void renderLeaf(const unsigned char *ptr)
 #ifdef DEBUG
       ++num_culled;
 #endif
+      // free up slot
+      if (core == 0) { --rface_next_id_0; } else { ++rface_next_id_1; }
       continue;
     }
     // prepare texturing info
@@ -442,10 +426,11 @@ void renderLeaf(const unsigned char *ptr)
       vertices + indices[first_idx], &rtexs[fc]);
     // backface? => skip
     if (rtexs[fc].ded < 0) {
-      --rface_next_id; // free up slot
 #ifdef DEBUG
       ++num_culled;
 #endif
+      // free up slot
+      if (core == 0) { --rface_next_id_0; } else { ++rface_next_id_1; }
       continue;
     }
     // surface and texture info
@@ -554,11 +539,15 @@ void renderLeaves(int len)
     }
     ++next;
     // render leaves
-    renderLeaf((const unsigned char*)first);
-    renderLeaf((const unsigned char*)second);
+    if (first) {
+      core1_done = 0;
+      core1_todo = 1; // request core 1 assistance
+      renderLeaf(0,(const unsigned char*)second);
+      while (core1_done != 1) {} // wait for core 1
+    }
     //printf("%d bytes\n", (int)dst - (int)memchunk);
     //printf("%d spans\n", span_alloc_0 + (MAX_NUM_SPANS - span_alloc_1));
-    //printf("%d rfaces\n", rface_next_id);
+    //printf("%d %d rfaces\n", rface_next_id_0, rface_next_id_1);
   }
 }
 
@@ -569,7 +558,8 @@ void renderLeaves(int len)
 static inline void render_frame()
 {
   // reset rface ids
-  rface_next_id = 0;
+  rface_next_id_0 = 0;
+  rface_next_id_1 = MAX_RASTER_FACES;
   // reset spans
   span_alloc_0 = 0;
   span_alloc_1 = MAX_NUM_SPANS;
@@ -597,39 +587,13 @@ static inline void render_frame()
   unsigned int tm_loc = time();
   unsigned short leaf = locate_leaf();
   unsigned int took   = time() - tm_loc;
-  printf("view %d,%d,%d in leaf %d (took %d cycles)\n", view.x, view.y, view.z, leaf, took);
+  // printf("view %d,%d,%d in leaf %d (took %d cycles)\n", view.x, view.y, view.z, leaf, took);
   /// get visibility list
   int len = readLeafVisList(leaf);
   /// check frustum - aabb
   frustumTest(len);
   /// render visible leaves
   renderLeaves(len);
-
-#if 0
-  /// project vertices
-#ifdef EMUL
-  project_vertices(0, n_vertices - 1);
-#else
-  // request core 1 assistance
-  core1_todo = 1;
-  project_vertices(0, (n_vertices / 2) - 1);
-  while (core1_done != 1) {} // wait for core 1
-#endif
-  /// transform surfaces
-  for (int s = 0; s < n_surfaces; ++s) {
-    surface_transform(&surfaces[s], &trsf_surfaces[s], transform);
-  }
-  /// rasterize faces
-#ifdef EMUL
-  render_leaves(0);
-  render_leaves(1);
-#else
-  // request core 1 assistance
-  core1_todo = 2;
-  render_leaves(0);
-  while (core1_done != 2) {} // wait for core 1
-#endif
-#endif
 
   //printf("%d spans\n", span_alloc_0 + (MAX_NUM_SPANS - span_alloc_1));
 
@@ -643,7 +607,6 @@ static inline void render_frame()
   tm_srfspan = 0;
 #endif
 
-#if 1
   /// render the spans
   for (int c = 0; c < SCREEN_WIDTH; ++c) {
 
@@ -655,7 +618,6 @@ static inline void render_frame()
       render_spans(c, ispan);
     }
 
-#ifndef EMUL
     // background filler
     if (empty) {
       col_send(
@@ -665,12 +627,11 @@ static inline void render_frame()
     }
     // send end of column
     col_send(0, COLDRAW_EOC);
-#endif
+
     // clear spans for this column
     span_heads_0[c] = 0;
     span_heads_1[c] = 0;
 
-#ifndef EMUL
     // process pending column commands
 #ifdef DEBUG
     unsigned int tm_cp = time();
@@ -678,7 +639,6 @@ static inline void render_frame()
     col_process();
 #ifdef DEBUG
     tm_colprocess += time() - tm_cp;
-#endif
 #endif
 
   }
@@ -690,8 +650,6 @@ static inline void render_frame()
   printf("num spans %d, faces: num vis %d, clipped %d, culled %d\n", span_alloc_0 + (MAX_NUM_SPANS - span_alloc_1),num_vis,num_clipped,num_culled);
 #endif
 
-#endif
-
 }
 
 // -----------------------------------------------------
@@ -700,6 +658,8 @@ static inline void render_frame()
 
 void main_0()
 {
+  unsigned char prev_uart_byte = 0;
+
   // --------------------------
   // intialize view and frame
   // --------------------------
@@ -741,27 +701,52 @@ void main_0()
   int v_end   = view.z + 2100;
   int v_step  = 1;
 
-  //view.x = 480 << 2;
-  //view.y = 88 << 2;
-  //view.z = -390 << 2;
+  //view.x = 128 << 2;
+  //view.y = -208 << 2;
+  //view.z = 1216 << 2;
 
-#ifndef EMUL
-  while (1)
-#endif
-  {
-#ifndef EMUL
+  while (1) {
+
     tm_frame = time();
-#endif
+
+    printf("."); // alive
 
     // draw screen
     render_frame();
 
-    //v_angle_y += 64;
-#if 1
+    int tm = time();
+    int elapsed = tm - tm_frame;
+    int speed = (elapsed >> 17);
+
+    prev_uart_byte = uart_byte();
+    if (prev_uart_byte == 'a') {
+      v_angle_y += speed<<1;
+    }
+    if (prev_uart_byte == 'd') {
+      v_angle_y -= speed<<1;
+    }
+    if (prev_uart_byte == 'x') {
+      view.x += speed;
+    }
+    if (prev_uart_byte == 'X') {
+      view.x -= speed;
+    }
+    if (prev_uart_byte == 'y') {
+      view.y += speed;
+    }
+    if (prev_uart_byte == 'Y') {
+      view.y -= speed;
+    }
+    if (prev_uart_byte == 'z') {
+      view.z += speed;
+    }
+    if (prev_uart_byte == 'Z') {
+      view.z -= speed;
+    }
+
+#if 0
 #ifndef EMUL
     // walk back and forth
-    int tm      = time();
-    int elapsed = tm - tm_frame;
     if (elapsed < 0) { elapsed = 1; }
     int speed   = (elapsed >> 17);
     view.z     += v_step * speed;

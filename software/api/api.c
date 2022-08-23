@@ -58,6 +58,15 @@ static inline int userdata()
 
 // -----------------------------------------------------
 
+static inline int uart_byte()
+{
+  int id;
+  asm volatile ("rdtime %0" : "=r"(id));
+  return (id >> 8)&255;
+}
+
+// -----------------------------------------------------
+
 static inline int col_full()
 {
   return ((userdata()&1) == 0);
