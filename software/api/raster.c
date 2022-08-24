@@ -217,7 +217,11 @@ static inline int rconvex_init(
       max_x     = x;
     }
   }
-  if (max_x < 0 || min_x > SCREEN_WIDTH) return 0;
+  if (max_x < 0 || min_x > SCREEN_WIDTH) {
+    t->x = -1;
+    t->last_x = -2;
+    return 0;
+  }
   t->x      = min_x;
   if (t->x < 0) { t->x = 0; } // redge_init properly deals with this too
   t->last_x = max_x;

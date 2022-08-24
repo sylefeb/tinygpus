@@ -315,7 +315,7 @@ void getLeaf(int leaf,volatile int **p_dst)
   if (length & 3) { // ensures we get the last bytes
     length += 4;
   }
-  // printf("reading leaf %d from %d len %d\n",leaf,offset,length);
+  //printf("reading leaf %d from %d len %d\n",leaf,offset,length);
   spiflash_copy(offset, *p_dst, length);
   *p_dst += length;
 }
@@ -372,6 +372,7 @@ void renderLeaf(int core,const unsigned char *ptr)
       fc = --rface_next_id_1;
     }
     if (rface_next_id_0 >= rface_next_id_1) {
+      printf("#F");
       return;
     }
     int first_idx = *(fptr++);
@@ -381,17 +382,17 @@ void renderLeaf(int core,const unsigned char *ptr)
     // check vertices for clipping
     const int *idx = indices + first_idx;
     int n_clipped  = 0;
-    int max_x = -2147483647; int max_y = -2147483647;
-    int min_x = 2147483647; int min_y = 2147483647;
+    //int max_x = -2147483647; int max_y = -2147483647;
+    //int min_x = 2147483647; int min_y = 2147483647;
     for (int v = 0; v < num_idx; ++v) {
       p2d p = prj_vertices[*(idx++)];
       if (p.x == 0x7FFF) {
         ++n_clipped;
       } else {
-        if (p.x > max_x) { max_x = p.x; }
+        /*if (p.x > max_x) { max_x = p.x; }
         if (p.x < min_x) { min_x = p.x; }
         if (p.y > max_y) { max_y = p.y; }
-        if (p.y < min_y) { min_y = p.y; }
+        if (p.y < min_y) { min_y = p.y; }*/
       }
     }
     // all clipped => skip
@@ -404,6 +405,7 @@ void renderLeaf(int core,const unsigned char *ptr)
       continue;
     }
     // out of bounds => skip
+    /*
     if (min_x >= SCREEN_WIDTH || max_x <= 0 || min_y >= SCREEN_HEIGHT || max_y <= 0) {
 #ifdef DEBUG
       ++num_culled;
@@ -412,6 +414,7 @@ void renderLeaf(int core,const unsigned char *ptr)
       if (core == 0) { --rface_next_id_0; } else { ++rface_next_id_1; }
       continue;
     }
+    */
     // prepare texturing info
     rconvex_texturing_pre_uv_origin(&trsf_surfaces[srfs_idx], transform,
       vertices + indices[first_idx], &rtexs[fc]);
@@ -450,15 +453,11 @@ void renderLeaf(int core,const unsigned char *ptr)
       }
       // -> clip
       int n_clipped = 0;
-      clip_polygon(z_clip,
-        trsf_vertices, num_idx,
-        face_vertices, &n_clipped);
-#ifdef EMUL
+      clip_polygon(z_clip, trsf_vertices, num_idx,
+                           face_vertices, &n_clipped);
       if (n_clipped >= POLY_MAX_SZ) {
-        printf("############# poly clip overflow");
-        exit(-1);
+        printf("#P");
       }
-#endif
       // -> project clipped vertices
       for (int v = 0; v < n_clipped; ++v) {
         project(&face_vertices[v], &face_prj_vertices[v]);
@@ -473,7 +472,15 @@ void renderLeaf(int core,const unsigned char *ptr)
 #endif
     // rasterize the face into spans
     rconvex rtri;
-    rconvex_init(&rtri, num_idx, ptr_indices, ptr_prj_vertices);
+    int ok = rconvex_init(&rtri, num_idx, ptr_indices, ptr_prj_vertices);
+    if (!ok) {
+#ifdef DEBUG
+      ++num_culled;
+#endif
+      // free up slot
+      if (core == 0) { --rface_next_id_0; } else { ++rface_next_id_1; }
+      continue;
+    }
     for (int c = rtri.x; c <= rtri.last_x; ++c) {
       rconvex_step(&rtri, num_idx, ptr_indices, ptr_prj_vertices);
       // insert span
@@ -701,7 +708,7 @@ void main_0()
 
     tm_frame = time();
 
-    printf("."); // alive
+    // printf("."); // alive
 
     // draw screen
     render_frame();
@@ -713,32 +720,23 @@ void main_0()
     prev_uart_byte = uart_byte();
     p3d front = { 0,0,256 };
     inv_transform(&front.x, &front.y, &front.z, 0);
+    if (prev_uart_byte == 'w') {
+      view.x += speed * front.x >> 7; view.y += speed * front.y >> 7; view.z += speed * front.z >> 7;
+    }
+    if (prev_uart_byte == 's') {
+      view.x -= speed * front.x >> 7; view.y -= speed * front.y >> 7; view.z -= speed * front.z >> 7;
+    }
     if (prev_uart_byte == 'a') {
       v_angle_y += speed<<1;
     }
     if (prev_uart_byte == 'd') {
       v_angle_y -= speed<<1;
     }
-    if (prev_uart_byte == 'x') {
-      view.x += speed;
-    }
-    if (prev_uart_byte == 'X') {
-      view.x -= speed;
-    }
     if (prev_uart_byte == 'y') {
       view.y += speed;
     }
     if (prev_uart_byte == 'Y') {
       view.y -= speed;
-    }
-    if (prev_uart_byte == 'z') {
-      view.z += speed;
-    }
-    if (prev_uart_byte == 'Z') {
-      view.z -= speed;
-    }
-    if (prev_uart_byte == 'w') {
-      view.x += front.x; view.y += front.y; view.z += front.z;
     }
 
 #if 0
