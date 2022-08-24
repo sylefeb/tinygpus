@@ -7,23 +7,49 @@ import os
 import curses
 from pynput import keyboard
 
-active = 1
-ser    = serial.Serial('COM3', 115200, timeout=0)
+active  = 1
+ser     = serial.Serial('COM3', 115200, timeout=0)
+command = 0
 
 def on_press(key):
-  global ser
+  global ser,command
   try:
-    ser.write(bytes(key.char,'utf-8'))
+    if key.char == 'w':
+      command = command | 1
+    if key.char == 's':
+      command = command | 2
+    if key.char == 'a':
+      command = command | 4
+    if key.char == 'd':
+      command = command | 8
+    if key.char == 'e':
+      command = command | 16
+    if key.char == 'q':
+      command = command | 32
+    ser.write(command.to_bytes(1,'big'))
   except AttributeError:
     print('special key {0} pressed'.format(key))
 
 def on_release(key):
-  global active,ser
-  ser.write(b'\x00')
+  global active,ser,command
   print('{0} released'.format(key))
   if key == keyboard.Key.esc:
     print('active ',active)
     active = 0
+    return False
+  if key.char == 'w':
+    command = command & (~1)
+  if key.char == 's':
+    command = command & (~2)
+  if key.char == 'a':
+    command = command & (~4)
+  if key.char == 'd':
+    command = command & (~8)
+  if key.char == 'e':
+    command = command & (~16)
+  if key.char == 'q':
+    command = command & (~32)
+  ser.write(command.to_bytes(1,'big'))
 
 def main(argv0, dev, data_fn=''):
 

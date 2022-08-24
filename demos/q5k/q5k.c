@@ -720,22 +720,22 @@ void main_0()
     prev_uart_byte = uart_byte();
     p3d front = { 0,0,256 };
     inv_transform(&front.x, &front.y, &front.z, 0);
-    if (prev_uart_byte == 'w') {
+    if (prev_uart_byte & 1) {
       view.x += speed * front.x >> 7; view.y += speed * front.y >> 7; view.z += speed * front.z >> 7;
     }
-    if (prev_uart_byte == 's') {
+    if (prev_uart_byte & 2) {
       view.x -= speed * front.x >> 7; view.y -= speed * front.y >> 7; view.z -= speed * front.z >> 7;
     }
-    if (prev_uart_byte == 'a') {
+    if (prev_uart_byte & 4) {
       v_angle_y += speed<<1;
     }
-    if (prev_uart_byte == 'd') {
+    if (prev_uart_byte & 8) {
       v_angle_y -= speed<<1;
     }
-    if (prev_uart_byte == 'y') {
+    if (prev_uart_byte & 16) {
       view.y += speed;
     }
-    if (prev_uart_byte == 'Y') {
+    if (prev_uart_byte & 32) {
       view.y -= speed;
     }
 
