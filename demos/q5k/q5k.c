@@ -37,7 +37,7 @@ volatile int rface_next_id_1;
 // array of transformed surfaces
 trsf_surface trsf_surfaces[n_surfaces];
 
-// #define DEBUG
+//#define DEBUG
 // ^^^^^^^^^^^^ uncomment to get profiling info over UART
 
 const int z_clip = 128; // near z clipping plane
@@ -179,7 +179,7 @@ void render_spans(int c, int ispan)
     // setup the surface span parameters
     int sid = srf_tex_nfo[(span->fid << 1) + 0];
     int tid = srf_tex_nfo[(span->fid << 1) + 1];
-    int dr = surface_setup_span(&trsf_surfaces[sid], rx, ry, rz);
+    int dr  = surface_setup_span(&trsf_surfaces[sid], rx, ry, rz);
 #ifdef DEBUG
     tm_srfspan += time() - tm_ss;
 #endif
@@ -558,6 +558,7 @@ static inline void render_frame()
   span_alloc_1 = MAX_NUM_SPANS;
 
   // ---- wait for previous frame to be done
+  *LEDS = 0;
   wait_all_drawn();
   // ---- now can access texture memory
 
@@ -569,6 +570,7 @@ static inline void render_frame()
 #endif
 
   /// transform frustum in world space
+  *LEDS = 1;
   frustum_transform(&frustum_view, z_clip, inv_transform, unproject, &frustum_trsf);
   /// transform surfaces
   for (int s = 0; s < n_surfaces; ++s) {
@@ -578,22 +580,26 @@ static inline void render_frame()
   unsigned int tm_1 = time();
 #endif
   /// locate current leaf
+  *LEDS = 2;
   unsigned short leaf = locate_leaf();
   // printf("view %d,%d,%d in leaf %d\n", view.x, view.y, view.z, leaf);
   /// get visibility list
 #ifdef DEBUG
   unsigned int tm_2 = time();
 #endif
+  *LEDS = 3;
   int len = readLeafVisList(leaf);
   /// check frustum - aabb
 #ifdef DEBUG
   unsigned int tm_3 = time();
 #endif
+  *LEDS = 4;
   frustumTest(len);
   /// render visible leaves
 #ifdef DEBUG
   unsigned int tm_4 = time();
 #endif
+  *LEDS = 5;
   renderLeaves(len);
 
 #ifdef DEBUG
@@ -602,6 +608,7 @@ static inline void render_frame()
   tm_srfspan = 0;
 #endif
 
+  *LEDS = 6;
   /// render the spans
   for (int c = 0; c < SCREEN_WIDTH; ++c) {
 
@@ -637,6 +644,8 @@ static inline void render_frame()
 #endif
 
   }
+
+  *LEDS = 7;
 
 #ifdef DEBUG
   unsigned int tm_6 = time();
@@ -704,8 +713,6 @@ void main_0()
   while (1) {
 
     tm_frame = time();
-
-    printf("."); // alive
 
     // draw screen
     render_frame();

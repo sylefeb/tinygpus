@@ -12,7 +12,7 @@
 // Column API
 // -----------------------------------------------------
 
-#define COLDRAW_COL(idx,start,end,light) ((idx) | ((start&255)<<10) | ((end/*>0*/)<<18) | ((light&15)<<26))
+#define COLDRAW_COL(idx,start,end,light) ((idx) | ((start&255)<<10) | ((end/*>=0*/)<<18) | ((light&15)<<26))
 
 #define WALL        (0<<30)
 #define PLANE       (1<<30)

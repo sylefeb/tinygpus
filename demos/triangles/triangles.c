@@ -20,7 +20,7 @@
 // Rotations
 // -----------------------------------------------------
 
-static inline void rot_z(int angle, int *x, int *y, int *z)
+static inline void rot_z(int angle, short *x, short *y, short *z)
 {
   int sin = sine_table[ angle         & 4095];
   int cos = sine_table[(angle + 1024) & 4095];
@@ -29,7 +29,7 @@ static inline void rot_z(int angle, int *x, int *y, int *z)
   *y = (sin * tx + cos * ty) >> 12;
 }
 
-static inline void rot_y(int angle, int *x, int *y, int *z)
+static inline void rot_y(int angle, short *x, short *y, short *z)
 {
   int sin = sine_table[ angle         & 4095];
   int cos = sine_table[(angle + 1024) & 4095];
@@ -68,7 +68,7 @@ const int view_dist = 700;
 int tr_angle;       // rotation angle
 p3d tr_translation; // translation
 
-static inline void transform(int *x, int *y, int *z,int w)
+static inline void transform(short *x, short *y, short *z,short w)
 {
   rot_z(tr_angle>>1, x,y,z);
   if (w != 0) { // vertex, else direction
@@ -79,7 +79,7 @@ static inline void transform(int *x, int *y, int *z,int w)
   }
 }
 
-static inline void project(const p3d* pt, p3d *pr)
+static inline void project(const p3d* pt, p2d *pr)
 {
 	int z     = pt->z;     // view space
 	int inv_z = 65536 / z; // NOTE: could precomp in this demo, each triangle
@@ -107,7 +107,7 @@ int     span_alloc;
 // rasterize multiple instances of the triangle
 #define N_TRIS 48
 // transformed and projected points
-p3d     prj_points[N_PTS];
+p2d     prj_points[N_PTS];
 // transformed texture surface
 trsf_surface tsrf;
 // texturing info (one per triangle)

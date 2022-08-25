@@ -654,7 +654,7 @@ $$end
       uint8 end      <:: next_command[18,8];
       uint1 param    <:: &(next_command[30,2]);
       uint1 empty    <:: ~param & (start > end);
-      uint1 eoc      <:: param & next_command[0,1]; // end of col
+      uint1 eoc      <::  param & next_command[0,1]; // end of col
       uint1 do_draw  <:: next_pending & ~eoc & ~drawer.busy;
       uint1 do_send  <:: next_pending &  eoc & ~drawer.busy & ~sender.busy;
       // drawer command
@@ -669,12 +669,15 @@ $$end
 $$if SIMULATION then
       if (do_send) {
         uint9 nsent(0);
-        if (nsent == 320) {
+        if (nsent == 319) {
           __display("[GPU] cycles in commands: %d",cycle_in_commands);
           nsent = 0;
         } else {
           nsent = nsent + 1;
         }
+      }
+      if (drawer.busy | sender.busy | do_draw | do_send) {
+        cycle_in_commands = cycle_in_commands + 1;
       }
 $$end
     }
@@ -686,9 +689,6 @@ $$end
     sender.buffer = ~draw_buffer;
 
 $$if SIMULATION then
-    if (drawer.busy | sender.busy) {
-      cycle_in_commands = cycle_in_commands + 1;
-    }
     cycle = cycle + 1;
 $$end
   }

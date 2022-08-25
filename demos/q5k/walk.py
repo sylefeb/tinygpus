@@ -74,8 +74,8 @@ def main(argv0, dev, data_fn=''):
     str = str + by.decode('utf-8')
     if len(str) > 0:
       if str[-1] == '\n':
-        print(str)
-        stdscr.addstr(0, ord(str[0]) - ord('0'), str)
+        # print(str)
+        stdscr.addstr(ord(str[0]) - ord('0'), 0, str[1:])
         stdscr.refresh()
         str = ''
   
