@@ -37,7 +37,7 @@ volatile int rface_next_id_1;
 // array of transformed surfaces
 trsf_surface trsf_surfaces[n_surfaces];
 
-#define DEBUG
+// #define DEBUG
 // ^^^^^^^^^^^^ uncomment to get profiling info over UART
 
 const int z_clip = 128; // near z clipping plane
@@ -382,17 +382,17 @@ void renderLeaf(int core,const unsigned char *ptr)
     // check vertices for clipping
     const int *idx = indices + first_idx;
     int n_clipped  = 0;
-    //int max_x = -2147483647; int max_y = -2147483647;
-    //int min_x = 2147483647; int min_y = 2147483647;
+    int max_x      = -2147483647; int max_y = -2147483647;
+    int min_x      = 2147483647;  int min_y = 2147483647;
     for (int v = 0; v < num_idx; ++v) {
       p2d p = prj_vertices[*(idx++)];
       if (p.x == 0x7FFF) {
         ++n_clipped;
       } else {
-        /*if (p.x > max_x) { max_x = p.x; }
+        if (p.x > max_x) { max_x = p.x; }
         if (p.x < min_x) { min_x = p.x; }
         if (p.y > max_y) { max_y = p.y; }
-        if (p.y < min_y) { min_y = p.y; }*/
+        if (p.y < min_y) { min_y = p.y; }
       }
     }
     // all clipped => skip
@@ -405,7 +405,6 @@ void renderLeaf(int core,const unsigned char *ptr)
       continue;
     }
     // out of bounds => skip
-    /*
     if (min_x >= SCREEN_WIDTH || max_x <= 0 || min_y >= SCREEN_HEIGHT || max_y <= 0) {
 #ifdef DEBUG
       ++num_culled;
@@ -414,7 +413,6 @@ void renderLeaf(int core,const unsigned char *ptr)
       if (core == 0) { --rface_next_id_0; } else { ++rface_next_id_1; }
       continue;
     }
-    */
     // prepare texturing info
     rconvex_texturing_pre_uv_origin(&trsf_surfaces[srfs_idx], transform,
       vertices + indices[first_idx], &rtexs[fc]);
@@ -445,8 +443,7 @@ void renderLeaf(int core,const unsigned char *ptr)
       // -> transform vertices
       const int *idx = indices + first_idx;
       p3d *v_dst = trsf_vertices;
-      for (int v = 0; v < POLY_MAX_SZ && v < num_idx; ++v) {
-        //            ^^^^^^ encourages unrolling?
+      for (int v = 0; v < num_idx; ++v) {
         p3d p = vertices[*(idx++)];
         transform(&p.x, &p.y, &p.z, 1);
         *(v_dst++) = p;
@@ -544,8 +541,6 @@ void renderLeaves(int len)
       while (core1_done != 1) {} // wait for core 1
     }
     //printf("%d bytes\n", (int)dst - (int)memchunk);
-    //printf("%d spans\n", span_alloc_0 + (MAX_NUM_SPANS - span_alloc_1));
-    //printf("%d %d rfaces\n", rface_next_id_0, rface_next_id_1);
   }
 }
 
@@ -645,7 +640,9 @@ static inline void render_frame()
 
 #ifdef DEBUG
   unsigned int tm_6 = time();
-  printf("trsf %d, loc %d, vis %d, vfc %d, render %d, spans %d (cols %d, srf %d)\n",
+  printf("1 %d spans\n", span_alloc_0 + (MAX_NUM_SPANS - span_alloc_1));
+  printf("2 %d rfaces\n", rface_next_id_0 + (MAX_RASTER_FACES - rface_next_id_1));
+  printf("3 trsf %d, loc %d, vis %d, vfc %d, render %d, spans %d (cols %d, srf %d)\n",
     tm_1 - tm_0, tm_2 - tm_1, tm_3 - tm_2, tm_4 - tm_3, tm_5 - tm_4, tm_6 - tm_5, tm_colprocess, tm_srfspan);
 #endif
 
@@ -708,7 +705,7 @@ void main_0()
 
     tm_frame = time();
 
-    // printf("."); // alive
+    printf("."); // alive
 
     // draw screen
     render_frame();

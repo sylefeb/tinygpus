@@ -14,7 +14,7 @@ $$SIMUL_QPSRAM=nil
 
 $$if MCH2022 or (SIMULATION and SIMUL_QPSRAM) then
   // overclocking at 60 MHz seems to be fine
-  $$master_freq = 60
+  $$master_freq = 66
   $$uart_in_clock_freq_mhz = master_freq//2
   $include('../../common/qpsram2x.si')
   import('../../common/ice40_half_clock.v')

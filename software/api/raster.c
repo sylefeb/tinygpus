@@ -289,6 +289,7 @@ static inline int rconvex_step(
 // for a texturing plane
 
 typedef struct {
+  short nx,ny,nz;
   short ux,uy,uz;
   short vx,vy,vz;
 } surface;
@@ -381,6 +382,7 @@ static inline void surface_pre(surface *s,int p0,int p1,int p2,const p3d *pts)
   p3d n;
   normal_from_three_points(pts + p0, pts + p1, pts + p2, &n);
   // compute u,v from n
+  s->nx = n.x; s->ny = n.y; s->nz = n.z;
   cross(n.x,n.y,n.z, 256,0,0,           &s->ux,&s->uy,&s->uz);
   normalize(&s->ux,&s->uy,&s->uz);
   cross(n.x,n.y,n.z, s->ux,s->uy,s->uz, &s->vx,&s->vy,&s->vz);
@@ -396,13 +398,13 @@ typedef void (*f_transform)(short *x, short *y, short *z, short w);
 static inline void surface_transform(const surface *s,trsf_surface *ts,
                                      f_transform trsf)
 {
+  ts->nx = s->nx; ts->ny = s->ny; ts->nz = s->nz;
   ts->ux = s->ux; ts->uy = s->uy; ts->uz = s->uz;
   ts->vx = s->vx; ts->vy = s->vy; ts->vz = s->vz;
   // transform plane vectors
+  trsf(&ts->nx,&ts->ny,&ts->nz,0);
   trsf(&ts->ux,&ts->uy,&ts->uz,0);
   trsf(&ts->vx,&ts->vy,&ts->vz,0);
-  // compute normal
-  cross(ts->vx, ts->vy, ts->vz, ts->ux, ts->uy, ts->uz, &ts->nx, &ts->ny, &ts->nz);
 }
 
 // ____________________________________________________________________________
@@ -442,7 +444,7 @@ static inline void rconvex_texturing_pre_uv_origin(
   rtex->v_offs = dot3(o.x, o.y, o.z, ts->vx, ts->vy, ts->vz);
   // plane distance
   rtex->ded = dot3(trp0.x, trp0.y, trp0.z, ts->nx, ts->ny, ts->nz) >> 8;
-  // NOTE: ded < 0 ==> backface surface
+  // NOTE: sign of ded indicates face orientation
   if (rtex->ded > 0) {
     rtex->u_offs = -rtex->u_offs;
     rtex->v_offs = -rtex->v_offs;
@@ -504,6 +506,7 @@ void clip_polygon(int z_clip, const p3d *pts, int n_pts, p3d *_clipped,int *_n_c
       prev_to_p.z = p.z - prev_p.z;
       // interpolation ratio
 #if 1
+      // use pre-computed table
       int delta = (p.z - prev_p.z);
       int neg = 0;
       if (delta < 0) {

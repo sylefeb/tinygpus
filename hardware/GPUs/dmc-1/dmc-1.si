@@ -607,6 +607,10 @@ unit DMC_1_gpu(
   output  uint8       pickedh,
   texmem_user         txm,
 ) {
+$$if SIMULATION then
+  uint32 cycle(0);
+  uint32 cycle_in_commands(0);
+$$end
   // column double buffers
   // - first  [0                    .. 2^doomchip_height_p2-1    ]
   // - second [2^doomchip_height_p2 .. 2^(doomchip_height_p2+1)-1]
@@ -662,6 +666,17 @@ unit DMC_1_gpu(
       sender.in_start   = do_send;
       // did we do anything?
       next_pending      = next_pending & ~(do_draw | do_send);
+$$if SIMULATION then
+      if (do_send) {
+        uint9 nsent(0);
+        if (nsent == 320) {
+          __display("[GPU] cycles in commands: %d",cycle_in_commands);
+          nsent = 0;
+        } else {
+          nsent = nsent + 1;
+        }
+      }
+$$end
     }
 
     // not ready while next command is pending
@@ -670,5 +685,11 @@ unit DMC_1_gpu(
     drawer.buffer =  draw_buffer;
     sender.buffer = ~draw_buffer;
 
+$$if SIMULATION then
+    if (drawer.busy | sender.busy) {
+      cycle_in_commands = cycle_in_commands + 1;
+    }
+    cycle = cycle + 1;
+$$end
   }
 }

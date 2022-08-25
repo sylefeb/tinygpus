@@ -18,9 +18,9 @@ def on_press(key):
       command = command | 1
     if key.char == 's':
       command = command | 2
-    if key.char == 'a':
-      command = command | 4
     if key.char == 'd':
+      command = command | 4
+    if key.char == 'a':
       command = command | 8
     if key.char == 'e':
       command = command | 16
@@ -41,9 +41,9 @@ def on_release(key):
     command = command & (~1)
   if key.char == 's':
     command = command & (~2)
-  if key.char == 'a':
-    command = command & (~4)
   if key.char == 'd':
+    command = command & (~4)
+  if key.char == 'a':
     command = command & (~8)
   if key.char == 'e':
     command = command & (~16)
@@ -75,7 +75,7 @@ def main(argv0, dev, data_fn=''):
     if len(str) > 0:
       if str[-1] == '\n':
         print(str)
-        stdscr.addstr(0, 0, str)
+        stdscr.addstr(0, ord(str[0]) - ord('0'), str)
         stdscr.refresh()
         str = ''
   
