@@ -366,7 +366,7 @@ void renderLeaf(int core,const unsigned char *ptr)
   ptr += sizeof(int);
   // printf("leaf has %d faces.\n", numf);
   const unsigned short *faces = (const unsigned short *)ptr;
-  ptr += numf * sizeof(short) * 5; // 5 shorts per face
+  ptr += numf * sizeof(short) * 7; // 7 shorts per face
   // face indices
   const int *indices = (const int*)ptr;
   // go through faces
@@ -382,11 +382,13 @@ void renderLeaf(int core,const unsigned char *ptr)
       printf("#F\n");
       return;
     }
-    int first_idx = *(fptr++);
-    int num_idx   = *(fptr++);
-    int nrm_idx   = *(fptr++);
-    int tvc_idx   = *(fptr++);
-    int tex_id    = *(fptr++);
+    unsigned short first_idx = *(fptr++);
+    unsigned short num_idx   = *(fptr++);
+    unsigned short nrm_idx   = *(fptr++);
+    unsigned short tvc_idx   = *(fptr++);
+    unsigned short tex_id    = *(fptr++);
+    unsigned short lmap_id   = *(fptr++);
+    unsigned short lmap_uv   = *(fptr++);
     // check vertices for clipping
     const int *idx = indices + first_idx;
     int n_clipped  = 0;
@@ -422,11 +424,17 @@ void renderLeaf(int core,const unsigned char *ptr)
       continue;
     }
     // prepare texturing info
+    char upos = lmap_uv & 255;
+    char vpos = lmap_uv >> 8;
     rconvex_texturing_pre_nuv(
       &trsf_normals[nrm_idx],
-      &trsf_texvecs[tvc_idx].vecS,&trsf_texvecs[tvc_idx].vecT,
-      trsf_texvecs[tvc_idx].distS,trsf_texvecs[tvc_idx].distT,
-      transform, vertices + indices[first_idx], &rtexs[fc]);
+      &trsf_texvecs[tvc_idx].vecS, 
+      &trsf_texvecs[tvc_idx].vecT,
+      /*upos << 14,*/ trsf_texvecs[tvc_idx].distS,
+      /*vpos << 14,*/ trsf_texvecs[tvc_idx].distT,
+      transform,
+      vertices + indices[first_idx],
+      &rtexs[fc]);
     // backface? => skip
     if (rtexs[fc].ded < 0) {
 #ifdef DEBUG
@@ -439,7 +447,7 @@ void renderLeaf(int core,const unsigned char *ptr)
     // surface and texture info
     srf_tex_nfo[(fc << 2) + 0] = nrm_idx;
     srf_tex_nfo[(fc << 2) + 1] = tvc_idx;
-    srf_tex_nfo[(fc << 2) + 2] = tex_id;
+    srf_tex_nfo[(fc << 2) + 2] = tex_id; //lmap_id; // tex_id;
     // clip?
     const int *ptr_indices;
     const p2d *ptr_prj_vertices;
@@ -592,9 +600,11 @@ static inline void render_frame()
   /// transform texvecs
   for (int n = 0; n < n_texvecs; ++n) {
     trsf_texvecs[n] = texvecs[n];
-    transform(&trsf_texvecs[n].vecS.x,&trsf_texvecs[n].vecS.y,
+    transform(&trsf_texvecs[n].vecS.x,
+              &trsf_texvecs[n].vecS.y,
               &trsf_texvecs[n].vecS.z,0);
-    transform(&trsf_texvecs[n].vecT.x,&trsf_texvecs[n].vecT.y,
+    transform(&trsf_texvecs[n].vecT.x,
+              &trsf_texvecs[n].vecT.y,
               &trsf_texvecs[n].vecT.z,0);
   }
 #ifdef DEBUG
@@ -603,7 +613,7 @@ static inline void render_frame()
   /// locate current leaf
   //*LEDS = 2;
   unsigned short leaf = locate_leaf();
-  printf("5 view %d,%d,%d in leaf %d\n", view.x, view.y, view.z, leaf);
+  printf("5 view %d,%d,%d (%d) in leaf %d\n", view.x, view.y, view.z, v_angle_y, leaf);
   /// get visibility list
 #ifdef DEBUG
   unsigned int tm_2 = time();
@@ -721,15 +731,19 @@ void main_0()
 #ifdef EMUL
   v_angle_y += 64;
 #else
-  v_angle_y = 0;
+  v_angle_y = 2048; // 1024;
 #endif
   int v_start = view.z - 1000;
   int v_end   = view.z + 2100;
   int v_step  = 1;
 
-  //view.x = 128 << 2;
-  //view.y = -208 << 2;
-  //view.z = 1216 << 2;
+  view.x =  1920;
+  view.y =   310;
+  view.z =  -926;
+
+  //view.x =  5042;
+  //view.y = -1469;
+  //view.z =  7169;
 
   while (1) {
 

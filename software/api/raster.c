@@ -302,7 +302,7 @@ typedef struct {
 
 typedef struct {
   int   u_offs,v_offs;
-  short ded;
+  int   ded;
 } rconvex_texturing;
 
 typedef int          int32_t;
@@ -432,23 +432,28 @@ static inline void rconvex_texturing_pre(
 // Same as above taking different n,u,v vectors
 static inline void rconvex_texturing_pre_nuv(
                                      const p3d *n,const p3d *u,const p3d *v,
-                                     short d_u,short d_v,
-                                     f_transform trsf, const p3d *p0,
+                                     int d_u,int d_v,
+                                     f_transform trsf,
+                                     const p3d *p_ref,
                                      rconvex_texturing *rtex)
 {
   // transform p0 (reference point for the transformed surface)
-  p3d trp0     = *p0;
+  p3d trp0 = { 0,0,0 };
   trsf(&trp0.x,&trp0.y,&trp0.z,1);
   // uv translation: translate so that p0 uv coordinates remain (0,0)
-  rtex->u_offs   = dot3( trp0.x,trp0.y,trp0.z, u->x,u->y,u->z ) + d_u;
-  rtex->v_offs   = dot3( trp0.x,trp0.y,trp0.z, v->x,v->y,v->z ) + d_v;
+  rtex->u_offs   = dot3( trp0.x,trp0.y,trp0.z, u->x,u->y,u->z );
+  rtex->v_offs   = dot3( trp0.x,trp0.y,trp0.z, v->x,v->y,v->z );
   // plane distance
+  trp0 = *p_ref;
+  trsf(&trp0.x, &trp0.y, &trp0.z, 1);
   rtex->ded      = dot3( trp0.x,trp0.y,trp0.z, n->x,n->y,n->z ) >> 8;
   // NOTE: ded < 0 ==> backface surface
   if (rtex->ded > 0) {
     rtex->u_offs = - rtex->u_offs;
     rtex->v_offs = - rtex->v_offs;
   }
+  rtex->u_offs += d_u << 8;
+  rtex->v_offs += d_v << 8;
 }
 
 // ____________________________________________________________________________

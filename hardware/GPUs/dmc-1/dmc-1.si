@@ -390,10 +390,12 @@ $$end
     sampler_io.do_bind  = 0;
     sampler_io.do_fetch = 0; // pulsed high when needed in always block
     // TODO: simplify below if applicable ===============================
-    sampler_io.u        =  (plane   ? tr_u[10,8]                  : 11b0)
+    sampler_io.u        =  (plane   ? {3b0,tr_u[10,8]}            : 11b0)
+                           //(plane   ? {3b0,tr_u[14,8]}            : 11b0) /// TEST lightmap
                         |  (wall    ? {3b0,wc_u_8}                : 11b0)
                         |  (terrain ? {          1b0,tr_u[12,10]} : 11b0);
-    sampler_io.v        =  (plane   ? {1b0,tr_v[10,8]}            : 11b0)
+    sampler_io.v        =  (plane   ? {3b0,tr_v[10,8]}            : 11b0)
+                           //(plane   ? {3b0,tr_v[14,8]}            : 11b0) /// TEST lightmap
                         |  (wall    ? {3b0,wc_v_8}                : 11b0)
                         |  (terrain ? {~current_done,tr_v[12,10]} : 11b0);
 //                                     ^^^^^^^^^^^^^ selects height or color
@@ -544,6 +546,11 @@ unit column_sender(
   output  uint1               busy(1),
 ) {
   brom uint18 palette[256] = {$palette666$};
+  //{
+$$for i=0,255 do
+    // $(i>>2)+(i>>2)*64+(i>>2)*64*64$,
+$$end
+  //};
 
   uint8  count(0);
   uint1  active(0);
