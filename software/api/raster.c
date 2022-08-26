@@ -429,25 +429,25 @@ static inline void rconvex_texturing_pre(
 }
 
 // ____________________________________________________________________________
-// Same as above using the origin as a global uv reference
-static inline void rconvex_texturing_pre_uv_origin(
-  const trsf_surface *ts, f_transform trsf,
-  const p3d *p0, rconvex_texturing *rtex)
+// Same as above taking different n,u,v vectors
+static inline void rconvex_texturing_pre_nuv(
+                                     const p3d *n,const p3d *u,const p3d *v,
+                                     short d_u,short d_v,
+                                     f_transform trsf, const p3d *p0,
+                                     rconvex_texturing *rtex)
 {
   // transform p0 (reference point for the transformed surface)
-  p3d trp0 = *p0;
-  trsf(&trp0.x, &trp0.y, &trp0.z, 1);
-  p3d o = { 0,0,0 };
-  trsf(&o.x, &o.y, &o.z, 1);
+  p3d trp0     = *p0;
+  trsf(&trp0.x,&trp0.y,&trp0.z,1);
   // uv translation: translate so that p0 uv coordinates remain (0,0)
-  rtex->u_offs = dot3(o.x, o.y, o.z, ts->ux, ts->uy, ts->uz);
-  rtex->v_offs = dot3(o.x, o.y, o.z, ts->vx, ts->vy, ts->vz);
+  rtex->u_offs   = dot3( trp0.x,trp0.y,trp0.z, u->x,u->y,u->z ) + d_u;
+  rtex->v_offs   = dot3( trp0.x,trp0.y,trp0.z, v->x,v->y,v->z ) + d_v;
   // plane distance
-  rtex->ded = dot3(trp0.x, trp0.y, trp0.z, ts->nx, ts->ny, ts->nz) >> 8;
-  // NOTE: sign of ded indicates face orientation
+  rtex->ded      = dot3( trp0.x,trp0.y,trp0.z, n->x,n->y,n->z ) >> 8;
+  // NOTE: ded < 0 ==> backface surface
   if (rtex->ded > 0) {
-    rtex->u_offs = -rtex->u_offs;
-    rtex->v_offs = -rtex->v_offs;
+    rtex->u_offs = - rtex->u_offs;
+    rtex->v_offs = - rtex->v_offs;
   }
 }
 
@@ -465,7 +465,7 @@ static inline void rconvex_texturing_bind(const rconvex_texturing *rtex)
 
 // ____________________________________________________________________________
 // Setup surface parameters for the span (return the dr parameter)
-static inline int surface_setup_span(trsf_surface *s,int rx,int ry,int rz)
+static inline int surface_setup_span(const trsf_surface *s,int rx,int ry,int rz)
 {
   int dr = dot3( rx,ry,rz, s->nx,s->ny,s->nz )>>8;
   int du = dot3( rx,ry,rz, s->ux,s->uy,s->uz )>>8;
@@ -479,6 +479,22 @@ static inline int surface_setup_span(trsf_surface *s,int rx,int ry,int rz)
   return dr;
 }
 
+// ____________________________________________________________________________
+// Same as above with given n,u,v vectors
+static inline int surface_setup_span_nuv(const p3d *n,const p3d *u,const p3d *v,
+                                         int rx,int ry,int rz)
+{
+  int dr = dot3( rx,ry,rz, n->x,n->y,n->z )>>8;
+  int du = dot3( rx,ry,rz, u->x,u->y,u->z )>>8;
+  int dv = dot3( rx,ry,rz, v->x,v->y,v->z )>>8;
+#ifndef EMUL
+  col_send(
+    PARAMETER_PLANE_A(n->y,u->y,v->y),
+    PARAMETER_PLANE_A_EX(du,dv) | PARAMETER
+  );
+#endif
+  return dr;
+}
 
 // ____________________________________________________________________________
 // Polygon clipping ; if the polygon has z coordinates below the near z plane

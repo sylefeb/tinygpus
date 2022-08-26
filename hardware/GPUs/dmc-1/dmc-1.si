@@ -300,7 +300,7 @@ $$end
     //                             ^^^^^^^^^^^ ensures max is behing anything
     uint1 depth_ok <::    (depth(depths.rdata0).b ^ buffer)
     //                                              ^^^^^ ignore prev. frame
-                        | (dist < depth(depths.rdata0).d);
+                        | (dist <= depth(depths.rdata0).d);
     // darkening with distance
     uint4  obscure_dist <:: (|dist[16,15]) ? 15 : dist[12,4];
     //                       ^^^^^^^^^^^ beyond lowest level

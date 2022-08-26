@@ -26,7 +26,7 @@ int time()    { return 0; }
 // array of texturing data
 #define MAX_RASTER_FACES 512
 rconvex_texturing rtexs[MAX_RASTER_FACES];
-unsigned char     srf_tex_nfo[MAX_RASTER_FACES * 2];
+unsigned char     srf_tex_nfo[MAX_RASTER_FACES * 4];
 // array of projected vertices
 #define MAX_PRJ_VERTICES 128
 p2d prj_vertices_0[MAX_PRJ_VERTICES];
@@ -34,8 +34,10 @@ p2d prj_vertices_1[MAX_PRJ_VERTICES];
 // raster face ids within frame
 volatile int rface_next_id_0;
 volatile int rface_next_id_1;
-// array of transformed surfaces
-trsf_surface trsf_surfaces[n_surfaces];
+// array of transformed normals
+p3d       trsf_normals[n_normals];
+// array of transformed texturing vectors
+t_texvecs trsf_texvecs[n_texvecs];
 
 //#define DEBUG
 // ^^^^^^^^^^^^ uncomment to get profiling info over UART
@@ -177,9 +179,14 @@ void render_spans(int c, int ispan)
     // bind the surface to the rasterizer
     rconvex_texturing_bind(&rtexs[span->fid]);
     // setup the surface span parameters
-    int sid = srf_tex_nfo[(span->fid << 1) + 0];
-    int tid = srf_tex_nfo[(span->fid << 1) + 1];
-    int dr  = surface_setup_span(&trsf_surfaces[sid], rx, ry, rz);
+    int nid = srf_tex_nfo[(span->fid << 2) + 0];
+    int sid = srf_tex_nfo[(span->fid << 2) + 1];
+    int tid = srf_tex_nfo[(span->fid << 2) + 2];
+    int dr  = surface_setup_span_nuv(
+                &trsf_normals[nid],
+                &trsf_texvecs[sid].vecS,
+                &trsf_texvecs[sid].vecT,
+                rx, ry, rz);
 #ifdef DEBUG
     tm_srfspan += time() - tm_ss;
 #endif
@@ -358,8 +365,8 @@ void renderLeaf(int core,const unsigned char *ptr)
   int numf = *(const int*)ptr;
   ptr += sizeof(int);
   // printf("leaf has %d faces.\n", numf);
-  const unsigned short *faces   = (const unsigned short *)ptr;
-  ptr += numf * sizeof(short) * 4; // 4 shorts per face
+  const unsigned short *faces = (const unsigned short *)ptr;
+  ptr += numf * sizeof(short) * 5; // 5 shorts per face
   // face indices
   const int *indices = (const int*)ptr;
   // go through faces
@@ -377,7 +384,8 @@ void renderLeaf(int core,const unsigned char *ptr)
     }
     int first_idx = *(fptr++);
     int num_idx   = *(fptr++);
-    int srfs_idx  = *(fptr++);
+    int nrm_idx   = *(fptr++);
+    int tvc_idx   = *(fptr++);
     int tex_id    = *(fptr++);
     // check vertices for clipping
     const int *idx = indices + first_idx;
@@ -414,8 +422,11 @@ void renderLeaf(int core,const unsigned char *ptr)
       continue;
     }
     // prepare texturing info
-    rconvex_texturing_pre_uv_origin(&trsf_surfaces[srfs_idx], transform,
-      vertices + indices[first_idx], &rtexs[fc]);
+    rconvex_texturing_pre_nuv(
+      &trsf_normals[nrm_idx],
+      &trsf_texvecs[tvc_idx].vecS,&trsf_texvecs[tvc_idx].vecT,
+      trsf_texvecs[tvc_idx].distS,trsf_texvecs[tvc_idx].distT,
+      transform, vertices + indices[first_idx], &rtexs[fc]);
     // backface? => skip
     if (rtexs[fc].ded < 0) {
 #ifdef DEBUG
@@ -426,8 +437,9 @@ void renderLeaf(int core,const unsigned char *ptr)
       continue;
     }
     // surface and texture info
-    srf_tex_nfo[(fc << 1) + 0] = srfs_idx;
-    srf_tex_nfo[(fc << 1) + 1] = tex_id;
+    srf_tex_nfo[(fc << 2) + 0] = nrm_idx;
+    srf_tex_nfo[(fc << 2) + 1] = tvc_idx;
+    srf_tex_nfo[(fc << 2) + 2] = tex_id;
     // clip?
     const int *ptr_indices;
     const p2d *ptr_prj_vertices;
@@ -572,9 +584,18 @@ static inline void render_frame()
   /// transform frustum in world space
   *LEDS = 1;
   frustum_transform(&frustum_view, z_clip, inv_transform, unproject, &frustum_trsf);
-  /// transform surfaces
-  for (int s = 0; s < n_surfaces; ++s) {
-    surface_transform(&surfaces[s], &trsf_surfaces[s], transform);
+  /// transform normals
+  for (int n = 0; n < n_normals; ++n) {
+    trsf_normals[n] = normals[n];
+    transform(&trsf_normals[n].x,&trsf_normals[n].y,&trsf_normals[n].z,0);
+  }
+  /// transform texvecs
+  for (int n = 0; n < n_texvecs; ++n) {
+    trsf_texvecs[n] = texvecs[n];
+    transform(&trsf_texvecs[n].vecS.x,&trsf_texvecs[n].vecS.y,
+              &trsf_texvecs[n].vecS.z,0);
+    transform(&trsf_texvecs[n].vecT.x,&trsf_texvecs[n].vecT.y,
+              &trsf_texvecs[n].vecT.z,0);
   }
 #ifdef DEBUG
   unsigned int tm_1 = time();

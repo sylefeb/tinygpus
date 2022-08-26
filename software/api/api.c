@@ -12,16 +12,16 @@
 // Column API
 // -----------------------------------------------------
 
-#define COLDRAW_COL(idx,start,end,light) ((idx) | ((start&255)<<10) | ((end/*>=0*/)<<18) | ((light&15)<<26))
+#define COLDRAW_COL(idx,start,end,light) ((idx) | ((start&255)<<10) | ((end/*>=0*/)<<18) | ((light)<<26))
 
 #define WALL        (0<<30)
 #define PLANE       (1<<30)
 #define TERRAIN     (2<<30)
 #define PARAMETER   (3<<30)
 
-#define COLDRAW_WALL(y,v_init,u_init) ((  y)/* >0 */) | ((((v_init))&255)<<16) | (((u_init)&255) << 24)
+#define COLDRAW_WALL(y,v_init,u_init) ((  y)/* >0 */) | ((((v_init))&255)<<16) | ((u_init) << 24)
 #define COLDRAW_TERRAIN(st,ed,pick)   (( ed)/* >0 */) | ((st/* > 0*/    )<<16) | (pick)
-#define COLDRAW_PLANE_B(ded,dr)       ((ded) & 65535) | (((dr) & 65535) << 16)
+#define COLDRAW_PLANE_B(ded,dr)       ((ded) & 65535) | ((dr) << 16)
 
 #define PICK        (1<<31)
 #define COLDRAW_EOC (PARAMETER | 1)
