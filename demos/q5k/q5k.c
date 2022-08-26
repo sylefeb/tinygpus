@@ -160,7 +160,7 @@ unsigned short span_heads_1[SCREEN_WIDTH]; // span pos in span_pool
 volatile unsigned short span_alloc_0;
 volatile unsigned short span_alloc_1;
 
-#define POLY_MAX_SZ 16 // hope for the best ... (!!)
+#define POLY_MAX_SZ 20 // hope for the best ... (!!)
 const int face_indices[POLY_MAX_SZ] = { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15 };
 
 // -----------------------------------------------------
@@ -379,7 +379,7 @@ void renderLeaf(int core,const unsigned char *ptr)
       fc = --rface_next_id_1;
     }
     if (rface_next_id_0 >= rface_next_id_1) {
-      printf("#F");
+      printf("#F\n");
       return;
     }
     int first_idx = *(fptr++);
@@ -465,7 +465,7 @@ void renderLeaf(int core,const unsigned char *ptr)
       clip_polygon(z_clip, trsf_vertices, num_idx,
                            face_vertices, &n_clipped);
       if (n_clipped >= POLY_MAX_SZ) {
-        printf("#P");
+        printf("#P\n");
       }
       // -> project clipped vertices
       for (int v = 0; v < n_clipped; ++v) {
@@ -582,7 +582,7 @@ static inline void render_frame()
 #endif
 
   /// transform frustum in world space
-  *LEDS = 1;
+  //*LEDS = 1;
   frustum_transform(&frustum_view, z_clip, inv_transform, unproject, &frustum_trsf);
   /// transform normals
   for (int n = 0; n < n_normals; ++n) {
@@ -601,26 +601,26 @@ static inline void render_frame()
   unsigned int tm_1 = time();
 #endif
   /// locate current leaf
-  *LEDS = 2;
+  //*LEDS = 2;
   unsigned short leaf = locate_leaf();
-  // printf("view %d,%d,%d in leaf %d\n", view.x, view.y, view.z, leaf);
+  printf("5 view %d,%d,%d in leaf %d\n", view.x, view.y, view.z, leaf);
   /// get visibility list
 #ifdef DEBUG
   unsigned int tm_2 = time();
 #endif
-  *LEDS = 3;
+  //*LEDS = 3;
   int len = readLeafVisList(leaf);
   /// check frustum - aabb
 #ifdef DEBUG
   unsigned int tm_3 = time();
 #endif
-  *LEDS = 4;
+  //*LEDS = 4;
   frustumTest(len);
   /// render visible leaves
 #ifdef DEBUG
   unsigned int tm_4 = time();
 #endif
-  *LEDS = 5;
+  //*LEDS = 5;
   renderLeaves(len);
 
 #ifdef DEBUG
@@ -629,7 +629,7 @@ static inline void render_frame()
   tm_srfspan = 0;
 #endif
 
-  *LEDS = 6;
+  //*LEDS = 6;
   /// render the spans
   for (int c = 0; c < SCREEN_WIDTH; ++c) {
 
@@ -666,7 +666,7 @@ static inline void render_frame()
 
   }
 
-  *LEDS = 7;
+  //*LEDS = 7;
 
 #ifdef DEBUG
   unsigned int tm_6 = time();

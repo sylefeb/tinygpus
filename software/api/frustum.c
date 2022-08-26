@@ -11,8 +11,8 @@
 
 // A plane
 typedef struct {
-	p3d   n;
-	short d;
+	p3d n;
+	int d;
 } plane;
 
 // An axis aligned box
@@ -43,8 +43,8 @@ int side(const plane *pl, int x, int y, int z)
 // Builds the frustum planes
 // not fast, meant to be computed once, planes are then transformed
 void frustum_pre(
-	frustum *f, 
-	void (*f_unproject)(const p2d *, short, p3d*), 
+	frustum *f,
+	void (*f_unproject)(const p2d *, short, p3d*),
 	int z_clip)
 {
 	// unproject screen points
@@ -72,7 +72,7 @@ void frustum_pre(
 		 |/      | /
 	 0 + ----- + 1
 		    near
-	
+
 	*/
 	// compute planes
 	// -> front
@@ -100,8 +100,8 @@ void frustum_pre(
 
 // ____________________________________________________________________________
 // Transform the frustum
-void frustum_transform(const frustum *src, int z_clip, 
-	void (*inv_transform)(short *x, short *y, short *z, short w), 
+void frustum_transform(const frustum *src, int z_clip,
+	void (*inv_transform)(short *x, short *y, short *z, short w),
 	void (*f_unproject)(const p2d *, short, p3d*),
 	frustum *trsf)
 {
@@ -113,13 +113,13 @@ void frustum_transform(const frustum *src, int z_clip,
 		/// TODO: find something faster
 		// point on plane
 		p3d o;
-		o.x = - (src->planes[i].n.x * src->planes[i].d) >> 8;
-		o.y = - (src->planes[i].n.y * src->planes[i].d) >> 8;
-		o.z = - (src->planes[i].n.z * src->planes[i].d) >> 8;
+		o.x = - ((int)src->planes[i].n.x * src->planes[i].d) >> 8;
+		o.y = - ((int)src->planes[i].n.y * src->planes[i].d) >> 8;
+		o.z = - ((int)src->planes[i].n.z * src->planes[i].d) >> 8;
 		// transform the point from view space to world space
 		inv_transform(&o.x, &o.y, &o.z, 1);
 		// compute distance
-		trsf->planes[i].d = - dot3(o.x, o.y, o.z, 
+		trsf->planes[i].d = - dot3(o.x, o.y, o.z,
 			                         trsf->planes[i].n.x, trsf->planes[i].n.y, trsf->planes[i].n.z) >> 8;
 	}
 
