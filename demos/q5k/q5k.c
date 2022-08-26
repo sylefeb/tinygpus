@@ -366,7 +366,7 @@ void renderLeaf(int core,const unsigned char *ptr)
   ptr += sizeof(int);
   // printf("leaf has %d faces.\n", numf);
   const unsigned short *faces = (const unsigned short *)ptr;
-  ptr += numf * sizeof(short) * 7; // 7 shorts per face
+  ptr += numf * sizeof(short) * 10; // 10 shorts per face
   // face indices
   const int *indices = (const int*)ptr;
   // go through faces
@@ -389,6 +389,10 @@ void renderLeaf(int core,const unsigned char *ptr)
     unsigned short tex_id    = *(fptr++);
     unsigned short lmap_id   = *(fptr++);
     unsigned short lmap_uv   = *(fptr++);
+    p3d            lmap_pref;
+    lmap_pref.x              = *(fptr++);
+    lmap_pref.y              = *(fptr++);
+    lmap_pref.z              = *(fptr++);
     // check vertices for clipping
     const int *idx = indices + first_idx;
     int n_clipped  = 0;
@@ -426,13 +430,15 @@ void renderLeaf(int core,const unsigned char *ptr)
     // prepare texturing info
     char upos = lmap_uv & 255;
     char vpos = lmap_uv >> 8;
+    // p3d o = {0,0,0};
     rconvex_texturing_pre_nuv(
       &trsf_normals[nrm_idx],
-      &trsf_texvecs[tvc_idx].vecS, 
+      &trsf_texvecs[tvc_idx].vecS,
       &trsf_texvecs[tvc_idx].vecT,
-      /*upos << 14,*/ trsf_texvecs[tvc_idx].distS,
-      /*vpos << 14,*/ trsf_texvecs[tvc_idx].distT,
+      ((int)upos) << 6, //trsf_texvecs[tvc_idx].distS,
+      ((int)vpos) << 6, //trsf_texvecs[tvc_idx].distT,
       transform,
+      &lmap_pref,
       vertices + indices[first_idx],
       &rtexs[fc]);
     // backface? => skip
@@ -447,7 +453,7 @@ void renderLeaf(int core,const unsigned char *ptr)
     // surface and texture info
     srf_tex_nfo[(fc << 2) + 0] = nrm_idx;
     srf_tex_nfo[(fc << 2) + 1] = tvc_idx;
-    srf_tex_nfo[(fc << 2) + 2] = tex_id; //lmap_id; // tex_id;
+    srf_tex_nfo[(fc << 2) + 2] = lmap_id; // tex_id;
     // clip?
     const int *ptr_indices;
     const p2d *ptr_prj_vertices;

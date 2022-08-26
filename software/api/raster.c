@@ -434,17 +434,17 @@ static inline void rconvex_texturing_pre_nuv(
                                      const p3d *n,const p3d *u,const p3d *v,
                                      int d_u,int d_v,
                                      f_transform trsf,
+                                     const p3d *p_ref_uv,
                                      const p3d *p_ref,
                                      rconvex_texturing *rtex)
 {
-  // transform p0 (reference point for the transformed surface)
-  p3d trp0 = { 0,0,0 };
+  p3d trp0 = *p_ref_uv; // transform reference point for uv texturing
   trsf(&trp0.x,&trp0.y,&trp0.z,1);
-  // uv translation: translate so that p0 uv coordinates remain (0,0)
+  // uv translation: translate so that p_ref_uv coordinates map on (0,0)
   rtex->u_offs   = dot3( trp0.x,trp0.y,trp0.z, u->x,u->y,u->z );
   rtex->v_offs   = dot3( trp0.x,trp0.y,trp0.z, v->x,v->y,v->z );
   // plane distance
-  trp0 = *p_ref;
+  trp0 = *p_ref; // transform reference point for surface
   trsf(&trp0.x, &trp0.y, &trp0.z, 1);
   rtex->ded      = dot3( trp0.x,trp0.y,trp0.z, n->x,n->y,n->z ) >> 8;
   // NOTE: ded < 0 ==> backface surface
