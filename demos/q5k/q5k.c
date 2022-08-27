@@ -23,10 +23,18 @@ int time()    { return 0; }
 #include "frustum.c"
 #include "q.h"
 
+typedef struct {
+  rconvex_texturing rtex;
+  unsigned char nrm_id;
+  unsigned char tvc_id;
+  unsigned char tex_id;
+  unsigned char lmap_id;
+  int lu_offs,lv_offs;
+} t_qrtexs;
+
 // array of texturing data
-#define MAX_RASTER_FACES 512
-rconvex_texturing rtexs[MAX_RASTER_FACES];
-unsigned char     srf_tex_nfo[MAX_RASTER_FACES * 4];
+#define MAX_RASTER_FACES 500
+t_qrtexs          rtexs[MAX_RASTER_FACES];
 // array of projected vertices
 #define MAX_PRJ_VERTICES 128
 p2d prj_vertices_0[MAX_PRJ_VERTICES];
@@ -50,7 +58,7 @@ frustum frustum_trsf; // frustum transformed in world space
 
 unsigned short vislist[n_max_vislen]; // stores the current vislist
 
-int memchunk[3192]; // a memory chunk to load data in and work with
+int memchunk[3000]; // a memory chunk to load data in and work with
 
 // -----------------------------------------------------
 // Rotations
@@ -99,6 +107,59 @@ unsigned int num_clipped;
 unsigned int num_culled;
 unsigned int num_vis;
 #endif
+
+// -----------------------------------------------------
+
+static inline void rconvex_texturing_with_lmap(
+                                     const p3d *n,const p3d *u,const p3d *v,
+                                     int d_u,int d_v,
+                                     int l_u,int l_v,
+                                     f_transform trsf,
+                                     const p3d *p_ref_uv,
+                                     const p3d *p_ref,
+                                     t_qrtexs *qrtex)
+{
+  p3d trp0 = {0,0,0}; // ref point for texturing (origin)
+  trsf(&trp0.x,&trp0.y,&trp0.z,1);
+  // uv translation: translate so that ref point coordinates map on (0,0)
+  qrtex->rtex.u_offs = dot3( trp0.x,trp0.y,trp0.z, u->x,u->y,u->z );
+  qrtex->rtex.v_offs = dot3( trp0.x,trp0.y,trp0.z, v->x,v->y,v->z );
+  // plane distance
+  trp0 = *p_ref; // transform reference point for surface
+  trsf(&trp0.x, &trp0.y, &trp0.z, 1);
+  qrtex->rtex.ded    = dot3( trp0.x,trp0.y,trp0.z, n->x,n->y,n->z ) >> 8;
+  // NOTE: ded < 0 ==> backface surface
+  // texturing offset
+  if (qrtex->rtex.ded > 0) {
+    qrtex->rtex.u_offs = - qrtex->rtex.u_offs;
+    qrtex->rtex.v_offs = - qrtex->rtex.v_offs;
+  }
+  qrtex->rtex.u_offs += d_u << 8;
+  qrtex->rtex.v_offs += d_v << 8;
+  // light map offset
+  trp0 = *p_ref_uv; // transform reference point for lightmap
+  trsf(&trp0.x, &trp0.y, &trp0.z, 1);
+  qrtex->lu_offs = dot3( trp0.x,trp0.y,trp0.z, u->x,u->y,u->z );
+  qrtex->lv_offs = dot3( trp0.x,trp0.y,trp0.z, v->x,v->y,v->z );
+  if (qrtex->rtex.ded > 0) {
+    qrtex->lu_offs = - qrtex->lu_offs;
+    qrtex->lv_offs = - qrtex->lv_offs;
+  }
+  qrtex->lu_offs += l_u << 8;
+  qrtex->lv_offs += l_v << 8;
+}
+
+// -----------------------------------------------------
+
+static inline void rconvex_texturing_bind_lightmap(const t_qrtexs *qrtex)
+{
+#ifndef EMUL
+  col_send(
+    PARAMETER_UV_OFFSET(qrtex->lv_offs),
+    PARAMETER_UV_OFFSET_EX(qrtex->lu_offs) | PARAMETER | LIGHTMAP_EN
+  );
+#endif
+}
 
 // -----------------------------------------------------
 
@@ -176,26 +237,53 @@ void render_spans(int c, int ispan)
 #ifdef DEBUG
     unsigned int tm_ss = time();
 #endif
-    // bind the surface to the rasterizer
-    rconvex_texturing_bind(&rtexs[span->fid]);
     // setup the surface span parameters
-    int nid = srf_tex_nfo[(span->fid << 2) + 0];
-    int sid = srf_tex_nfo[(span->fid << 2) + 1];
-    int tid = srf_tex_nfo[(span->fid << 2) + 2];
+    int nid = rtexs[span->fid].nrm_id;
+    int sid = rtexs[span->fid].tvc_id;
+    int tid = rtexs[span->fid].tex_id;
+    int lid = rtexs[span->fid].lmap_id;
+    /*
     int dr  = surface_setup_span_nuv(
                 &trsf_normals[nid],
                 &trsf_texvecs[sid].vecS,
                 &trsf_texvecs[sid].vecT,
                 rx, ry, rz);
+    */
+    const p3d *n = &trsf_normals[nid];
+    const p3d *u = &trsf_texvecs[sid].vecS;
+    const p3d *v = &trsf_texvecs[sid].vecT;
+    int dr = dot3( rx,ry,rz, n->x,n->y,n->z )>>8;
+    int du = dot3( rx,ry,rz, u->x,u->y,u->z )>>8;
+    int dv = dot3( rx,ry,rz, v->x,v->y,v->z )>>8;
+
 #ifdef DEBUG
     tm_srfspan += time() - tm_ss;
 #endif
+
+    // bind the surface to the rasterizer
+    col_send(
+      PARAMETER_PLANE_A(n->y,u->y,v->y),
+      PARAMETER_PLANE_A_EX(du,dv) | PARAMETER
+    );
+    rconvex_texturing_bind(&rtexs[span->fid].rtex); /// TODO: move after surface_setup_span_nuv
     // column drawing
     col_send(
-      COLDRAW_PLANE_B(rtexs[span->fid].ded, dr),
-      COLDRAW_COL(tid, span->ys, span->ye,
-        15 /*light*/) | PLANE
+      COLDRAW_PLANE_B(rtexs[span->fid].rtex.ded, dr),
+      COLDRAW_COL(tid, span->ys, span->ye, 15) | PLANE
     );
+
+    // light map
+    col_send(
+      PARAMETER_PLANE_A(n->y,u->y,v->y),
+      PARAMETER_PLANE_A_EX(du,dv) | PARAMETER
+    );
+    rconvex_texturing_bind_lightmap(&rtexs[span->fid]);
+    // column drawing
+    col_send(
+      COLDRAW_PLANE_B(rtexs[span->fid].rtex.ded, dr),
+      COLDRAW_COL(lid, span->ys, span->ye, 15) | PLANE
+    );
+
     // process pending column commands
 #ifdef DEBUG
     unsigned int tm_cp = time();
@@ -384,8 +472,8 @@ void renderLeaf(int core,const unsigned char *ptr)
     }
     unsigned short first_idx = *(fptr++);
     unsigned short num_idx   = *(fptr++);
-    unsigned short nrm_idx   = *(fptr++);
-    unsigned short tvc_idx   = *(fptr++);
+    unsigned short nrm_id    = *(fptr++);
+    unsigned short tvc_id    = *(fptr++);
     unsigned short tex_id    = *(fptr++);
     unsigned short lmap_id   = *(fptr++);
     unsigned short lmap_uv   = *(fptr++);
@@ -431,18 +519,17 @@ void renderLeaf(int core,const unsigned char *ptr)
     char upos = lmap_uv & 255;
     char vpos = lmap_uv >> 8;
     // p3d o = {0,0,0};
-    rconvex_texturing_pre_nuv(
-      &trsf_normals[nrm_idx],
-      &trsf_texvecs[tvc_idx].vecS,
-      &trsf_texvecs[tvc_idx].vecT,
-      ((int)upos) << 6, //trsf_texvecs[tvc_idx].distS,
-      ((int)vpos) << 6, //trsf_texvecs[tvc_idx].distT,
+    rconvex_texturing_with_lmap(
+      &trsf_normals[nrm_id],
+      &trsf_texvecs[tvc_id].vecS, &trsf_texvecs[tvc_id].vecT,
+      trsf_texvecs[tvc_id].distS, trsf_texvecs[tvc_id].distT,
+      ((int)upos) << 6, ((int)vpos) << 6,
       transform,
       &lmap_pref,
       vertices + indices[first_idx],
       &rtexs[fc]);
     // backface? => skip
-    if (rtexs[fc].ded < 0) {
+    if (rtexs[fc].rtex.ded < 0) {
 #ifdef DEBUG
       ++num_culled;
 #endif
@@ -451,9 +538,10 @@ void renderLeaf(int core,const unsigned char *ptr)
       continue;
     }
     // surface and texture info
-    srf_tex_nfo[(fc << 2) + 0] = nrm_idx;
-    srf_tex_nfo[(fc << 2) + 1] = tvc_idx;
-    srf_tex_nfo[(fc << 2) + 2] = lmap_id; // tex_id;
+    rtexs[fc].nrm_id  = nrm_id;
+    rtexs[fc].tvc_id  = tvc_id;
+    rtexs[fc].tex_id  = tex_id;
+    rtexs[fc].lmap_id = lmap_id;
     // clip?
     const int *ptr_indices;
     const p2d *ptr_prj_vertices;

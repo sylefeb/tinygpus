@@ -74,12 +74,15 @@ def main(argv0, dev, data_fn=''):
     str = str + by.decode('utf-8')
     if len(str) > 0:
       if str[-1] == '\n':
-        if str[0] != '#':
-          stdscr.addstr(ord(str[0]) - ord('0'), 0, str[1:])
-        else:
-          stdscr.addstr(20, 0, str[1:])
-        stdscr.refresh()
-        str = ''
+        try:
+          if ord(str[0]) - ord('0') < 10:
+            stdscr.addstr(ord(str[0]) - ord('0'), 0, str[1:])
+          else:
+            stdscr.addstr(20, 0, str[1:])
+          stdscr.refresh()
+          str = ''
+        except:
+          print('error: ',str)
   
   listener.stop()
   ser.close()

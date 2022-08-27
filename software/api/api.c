@@ -25,6 +25,7 @@
 
 #define PICK        (1<<31)
 #define COLDRAW_EOC (PARAMETER | 1)
+#define LIGHTMAP_EN (1<<25)
 
 // parameter: ray cs (terrain)
 #define PARAMETER_RAY_CS(cs,ss)      (0<<30) | (( cs) & 16383) | ((   ss & 16383 )<<14)

@@ -27,6 +27,8 @@ $$ profile           = nil
 $$ verbose           = 1
 $$end
 
+$$config['simple_dualport_bram_wmask_half_bytes_wenable1_width'] = 'data'
+
 // ---------------------------------------------------
 
 group sampler2D {
@@ -222,6 +224,9 @@ $$end
   uint1  pickh_done(0);  // picking done
   uint1  current_done <:: (current >= end); // column end reached
 
+  // ---- render state
+  uint1  lmapmode(0);    // 1 when in lightmap mode
+
   // ---- plane (perspective)
   int24  dot_u(0);
   int24  dot_v(0);
@@ -307,7 +312,7 @@ $$end
     int5   light        <:: (__signed({1b0,in_command[26,4]})
                            - __signed({1b0,obscure_clmp[0,4]}));
     // opactiy test
-    uint1 opaque     <:: ~tcol_rdy & ~skip[0,1] & (sampler_io.texel != 255);
+    uint1 opaque     <:: ~tcol_rdy & ~skip[0,1] & ((sampler_io.texel != 255) | lmapmode);
     uint1 bkg        <:: sampler_io.tex_id == 0; // in background
     // final tex coords for walls
     uint8 wc_u_8     <:: (wc_u     );
@@ -374,9 +379,11 @@ $$end
       sameas(current) pixcoord <:: current;
       //sameas(current) pixcoord <:: current;
       colbufs.addr1       = { buffer,pixcoord[0,$doomchip_height_p2$] };
-      colbufs.wdata1      = { (light[4,1] ? 4b0 : light[0,4]) | (bkg ? 4d15 : 4d0),
-                              sampler_io.texel };
-      colbufs.wenable1    = smplr_delay[$delay_bit$,1] & depth_ok & opaque;
+      colbufs.wdata1      = ~lmapmode ?
+      { (light[4,1] ? 4b0 : light[0,4]) | (bkg ? 4d15 : 4d0), sampler_io.texel }
+    : { sampler_io.texel[4,4], 8b0 };
+      colbufs.wenable1    = {3{smplr_delay[$delay_bit$,1] & depth_ok & opaque}}
+                          & {3{1b1,~lmapmode,~lmapmode}};
       // ---- read/write to depth buffer
       depths.addr0        = pixcoord;
       depths.addr1        = pixcoord;
@@ -389,12 +396,12 @@ $$end
     sampler_io.do_bind  = 0;
     sampler_io.do_fetch = 0; // pulsed high when needed in always block
     // TODO: simplify below if applicable ===============================
-    sampler_io.u        =  //(plane   ? {3b0,tr_u[10,8]}            : 11b0)
-                           (plane   ? {3b0,tr_u[14,8]}            : 11b0) /// TEST lightmap
+    sampler_io.u        =  (plane & ~lmapmode  ? {3b0,tr_u[10,8]} : 11b0)
+                        |  (plane &  lmapmode  ? {3b0,tr_u[14,8]} : 11b0)
                         |  (wall    ? {3b0,wc_u_8}                : 11b0)
                         |  (terrain ? {          1b0,tr_u[12,10]} : 11b0);
-    sampler_io.v        =  //(plane   ? {3b0,tr_v[10,8]}            : 11b0)
-                           (plane   ? {3b0,tr_v[14,8]}            : 11b0) /// TEST lightmap
+    sampler_io.v        =  (plane & ~lmapmode  ? {3b0,tr_v[10,8]} : 11b0)
+                        |  (plane &  lmapmode  ? {3b0,tr_v[14,8]} : 11b0)
                         |  (wall    ? {3b0,wc_v_8}                : 11b0)
                         |  (terrain ? {~current_done,tr_v[12,10]} : 11b0);
 //                                     ^^^^^^^^^^^^^ selects height or color
@@ -421,6 +428,8 @@ $$end
       // u,v offsets (plane)
       u_offset           = uv_offs? __signed(in_command[ 1,24]) : u_offset;
       v_offset           = uv_offs? __signed(in_command[32,24]) : v_offset;
+      // lightmap mode enable
+      lmapmode           = uv_offs? __signed(in_command[25, 1]) : lmapmode;
       // view_z
       view_z             = set_vwz? __signed(in_command[32,16]) : view_z;
       // plane span data
@@ -544,12 +553,7 @@ unit column_sender(
   output! uint16              screen_data,
   output  uint1               busy(1),
 ) {
-  brom uint18 palette[256] = // {$palette666$};
-  {
-$$for i=0,255 do
-    $(i>>2)+(i>>2)*64+(i>>2)*64*64$,
-$$end
-  };
+  brom uint18 palette[256] = {$palette666$};
 
   uint8  count(0);
   uint1  active(0);
@@ -620,7 +624,7 @@ $$end
   // column double buffers
   // - first  [0                    .. 2^doomchip_height_p2-1    ]
   // - second [2^doomchip_height_p2 .. 2^(doomchip_height_p2+1)-1]
-  simple_dualport_bram uint12 colbufs[$1<<(doomchip_height_p2+1)$] = uninitialized;
+  simple_dualport_bram uint12 colbufs<"simple_dualport_bram_wmask_half_bytes">[$1<<(doomchip_height_p2+1)$] = uninitialized;
   //                   ^^^^^^ { light , palette id }
 
   span_drawer drawer<reginputs>(
