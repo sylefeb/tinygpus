@@ -50,12 +50,12 @@ def on_release(key):
 def main(argv0, dev, data_fn=''):
   global ser
 
-#  stdscr = curses.initscr()
-#  curses.noecho()
-#  curses.cbreak()
-#  stdscr.keypad(True)
-#  stdscr.nodelay(1)
-#  stdscr.clear()
+  stdscr = curses.initscr()
+  curses.noecho()
+  curses.cbreak()
+  stdscr.keypad(True)
+  stdscr.nodelay(1)
+  stdscr.clear()
  
   ser = serial.Serial(dev, 115200, timeout=0)
 
@@ -74,11 +74,11 @@ def main(argv0, dev, data_fn=''):
     if len(str) > 0:
       if str[-1] == '\n':
         try:
-          #if ord(str[0]) - ord('0') < 10:
-          #  stdscr.addstr(ord(str[0]) - ord('0'), 0, str[1:])
-          #else:
-          #  stdscr.addstr(20, 0, str[1:])
-          #stdscr.refresh()
+          if ord(str[0]) - ord('0') < 10:
+            stdscr.addstr(ord(str[0]) - ord('0'), 0, str[1:])
+          else:
+            stdscr.addstr(20, 0, str[1:])
+          stdscr.refresh()
           str = ''
         except:
           print('error: ',str)
@@ -86,10 +86,10 @@ def main(argv0, dev, data_fn=''):
   listener.stop()
   ser.close()
 
-#  curses.nocbreak()
-#  stdscr.keypad(False)
-#  curses.echo()
-#  curses.endwin()
+  curses.nocbreak()
+  stdscr.keypad(False)
+  curses.echo()
+  curses.endwin()
   
   return 0
 

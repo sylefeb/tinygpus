@@ -23,6 +23,13 @@ int time()    { return 0; }
 #include "frustum.c"
 #include "q.h"
 
+#define DEBUG
+// ^^^^^^^^^^^^ uncomment to get profiling info over UART
+
+const int z_clip = 64; // near z clipping plane
+
+// -----------------------------------------------------
+
 typedef struct {
   rconvex_texturing rtex;
   unsigned char nrm_id;
@@ -33,23 +40,23 @@ typedef struct {
 } t_qrtexs;
 
 // array of texturing data
-#define MAX_RASTER_FACES 300
+#define MAX_RASTER_FACES 450
 t_qrtexs          rtexs[MAX_RASTER_FACES];
+
+// -----------------------------------------------------
+
 // array of projected vertices
 p2d prj_vertices_0[n_max_verts];
 p2d prj_vertices_1[n_max_verts];
+
 // raster face ids within frame
 volatile int rface_next_id_0;
 volatile int rface_next_id_1;
+
 // array of transformed normals
 p3d       trsf_normals[n_normals];
 // array of transformed texturing vectors
 t_texvecs trsf_texvecs[n_texvecs];
-
-//#define DEBUG
-// ^^^^^^^^^^^^ uncomment to get profiling info over UART
-
-const int z_clip = 128; // near z clipping plane
 
 // frustum
 frustum frustum_view; // frustum in view space
@@ -58,6 +65,27 @@ frustum frustum_trsf; // frustum transformed in world space
 unsigned short vislist[n_max_vislen]; // stores the current vislist
 
 int memchunk[3192]; // a memory chunk to load data in and work with
+
+// -----------------------------------------------------
+
+typedef struct s_span {
+  unsigned char  ys;
+  unsigned char  ye;
+  unsigned short fid;  // face id
+  unsigned short next; // span pos in span_pool
+} t_span;
+
+#define MAX_NUM_SPANS 11000
+t_span         span_pool   [MAX_NUM_SPANS];
+unsigned short span_heads_0[SCREEN_WIDTH]; // span pos in span_pool
+unsigned short span_heads_1[SCREEN_WIDTH]; // span pos in span_pool
+volatile unsigned short span_alloc_0;
+volatile unsigned short span_alloc_1;
+
+// -----------------------------------------------------
+
+#define POLY_MAX_SZ 20 // hope for the best ... (!!)
+const int face_indices[POLY_MAX_SZ] = { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15 };
 
 // -----------------------------------------------------
 // Rotations
@@ -102,9 +130,8 @@ int v_angle_y = 0;
 #ifdef DEBUG
 unsigned int tm_colprocess;
 unsigned int tm_srfspan;
+unsigned int tm_api;
 unsigned int num_clipped;
-unsigned int num_culled;
-unsigned int num_vis;
 #endif
 
 // -----------------------------------------------------
@@ -207,25 +234,6 @@ static inline void unproject(const p2d *pr,short z,p3d* pt)
 
 // -----------------------------------------------------
 
-typedef struct s_span {
-  unsigned char  ys;
-  unsigned char  ye;
-  unsigned short fid;  // face id
-  unsigned short next; // span pos in span_pool
-} t_span;
-
-#define MAX_NUM_SPANS 10000
-t_span         span_pool   [MAX_NUM_SPANS];
-unsigned short span_heads_0[SCREEN_WIDTH]; // span pos in span_pool
-unsigned short span_heads_1[SCREEN_WIDTH]; // span pos in span_pool
-volatile unsigned short span_alloc_0;
-volatile unsigned short span_alloc_1;
-
-#define POLY_MAX_SZ 20 // hope for the best ... (!!)
-const int face_indices[POLY_MAX_SZ] = { 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15 };
-
-// -----------------------------------------------------
-
 void render_spans(int c, int ispan)
 {
   while (ispan) {
@@ -234,6 +242,7 @@ void render_spans(int c, int ispan)
     int rz = 256;
     int rx = c - SCREEN_WIDTH / 2;
     int ry = span->ys - SCREEN_HEIGHT / 2;
+
 #ifdef DEBUG
     unsigned int tm_ss = time();
 #endif
@@ -242,22 +251,16 @@ void render_spans(int c, int ispan)
     int sid = rtexs[span->fid].tvc_id;
     int tid = rtexs[span->fid].tex_id;
     int lid = rtexs[span->fid].lmap_id;
-    /*
-    int dr  = surface_setup_span_nuv(
-                &trsf_normals[nid],
-                &trsf_texvecs[sid].vecS,
-                &trsf_texvecs[sid].vecT,
-                rx, ry, rz);
-    */
+    // surface_setup_span_nuv
     const p3d *n = &trsf_normals[nid];
     const p3d *u = &trsf_texvecs[sid].vecS;
     const p3d *v = &trsf_texvecs[sid].vecT;
     int dr = dot3( rx,ry,rz, n->x,n->y,n->z )>>8;
     int du = dot3( rx,ry,rz, u->x,u->y,u->z )>>8;
     int dv = dot3( rx,ry,rz, v->x,v->y,v->z )>>8;
-
 #ifdef DEBUG
-    tm_srfspan += time() - tm_ss;
+    unsigned int tm_ap = time();
+    tm_srfspan += tm_ap - tm_ss;
 #endif
 
     // bind the surface to the rasterizer
@@ -286,6 +289,7 @@ void render_spans(int c, int ispan)
     // process pending column commands
 #ifdef DEBUG
     unsigned int tm_cp = time();
+    tm_api += tm_cp - tm_ap;
 #endif
     col_process();
 #ifdef DEBUG
@@ -360,9 +364,18 @@ unsigned short locate_leaf()
 
 // -----------------------------------------------------
 
+static inline int leafOffset(int leaf)
+{
+  volatile int offset;
+  spiflash_copy(o_leaf_offsets + leaf*sizeof(int), &offset, sizeof(int));
+  return offset;
+}
+
+// -----------------------------------------------------
+
 int readLeafVisList(int leaf)
 {
-  int offset = o_leaves[leaf];
+  int offset = leafOffset(leaf);
   volatile int start;
   spiflash_copy(offset + 6 * sizeof(short), &start, sizeof(int));
   volatile int len;
@@ -374,7 +387,7 @@ int readLeafVisList(int leaf)
   // now read all bboxes
   volatile unsigned char *dst = (unsigned char *)memchunk;
   for (int i = 0; i < len; ++i) {
-    spiflash_copy(o_leaves[vislist[i]], (volatile int *)dst, sizeof(short)*6 );
+    spiflash_copy(leafOffset(vislist[i]), (volatile int *)dst, sizeof(short)*6 );
     dst += sizeof(short) * 6;
   }
   return len;
@@ -403,9 +416,9 @@ void frustumTest(int len)
 
 void getLeaf(int leaf,volatile int **p_dst)
 {
-  int offset = o_leaves[leaf] + sizeof(short) * 6 + sizeof(int) * 2;
+  int offset = leafOffset(leaf) + sizeof(short) * 6 + sizeof(int) * 2;
   //                            ^^^ bbox            ^^^ vis start,len
-  int length = o_leaves[leaf + 1] - offset;
+  int length = leafOffset(leaf + 1) - offset;
   if (length & 3) { // ensures we get the last bytes
     length += 4;
   }
@@ -498,18 +511,12 @@ void renderLeaf(int core,const unsigned char *ptr)
     }
     // all clipped => skip
     if (n_clipped == num_idx) {
-#ifdef DEBUG
-      ++num_culled;
-#endif
       // free up slot
       if (core == 0) { --rface_next_id_0; } else { ++rface_next_id_1; }
       continue;
     }
     // out of bounds => skip
     if (min_x >= SCREEN_WIDTH || max_x <= 0 || min_y >= SCREEN_HEIGHT || max_y <= 0) {
-#ifdef DEBUG
-      ++num_culled;
-#endif
       // free up slot
       if (core == 0) { --rface_next_id_0; } else { ++rface_next_id_1; }
       continue;
@@ -529,9 +536,6 @@ void renderLeaf(int core,const unsigned char *ptr)
       &rtexs[fc]);
     // backface? => skip
     if (rtexs[fc].rtex.ded < 0) {
-#ifdef DEBUG
-      ++num_culled;
-#endif
       // free up slot
       if (core == 0) { --rface_next_id_0; } else { ++rface_next_id_1; }
       continue;
@@ -577,16 +581,10 @@ void renderLeaf(int core,const unsigned char *ptr)
       ptr_prj_vertices = face_prj_vertices;
       num_idx = n_clipped;
     }
-#ifdef DEBUG
-    ++num_vis;
-#endif
     // rasterize the face into spans
     rconvex rtri;
     int ok = rconvex_init(&rtri, num_idx, ptr_indices, ptr_prj_vertices);
     if (!ok) {
-#ifdef DEBUG
-      ++num_culled;
-#endif
       // free up slot
       if (core == 0) { --rface_next_id_0; } else { ++rface_next_id_1; }
       continue;
@@ -678,8 +676,6 @@ static inline void render_frame()
 #ifdef DEBUG
   unsigned int tm_0 = time();
   num_clipped = 0;
-  num_culled = 0;
-  num_vis = 0;
 #endif
 
   /// transform frustum in world space
@@ -706,7 +702,7 @@ static inline void render_frame()
   /// locate current leaf
   //*LEDS = 2;
   unsigned short leaf = locate_leaf();
-  printf("5 view %d,%d,%d (%d) in leaf %d\n", view.x, view.y, view.z, v_angle_y, leaf);
+  // printf("5 view %d,%d,%d (%d) in leaf %d\n", view.x, view.y, view.z, v_angle_y, leaf);
   /// get visibility list
 #ifdef DEBUG
   unsigned int tm_2 = time();
@@ -730,6 +726,7 @@ static inline void render_frame()
   unsigned int tm_5 = time();
   tm_colprocess = 0;
   tm_srfspan = 0;
+  tm_api = 0;
 #endif
 
   //*LEDS = 6;
@@ -774,9 +771,9 @@ static inline void render_frame()
 #ifdef DEBUG
   unsigned int tm_6 = time();
   printf("1 %d spans\n", span_alloc_0 + (MAX_NUM_SPANS - span_alloc_1));
-  printf("2 %d rfaces\n", rface_next_id_0 + (MAX_RASTER_FACES - rface_next_id_1));
-  printf("3 trsf %d, loc %d, vis %d, vfc %d, render %d, spans %d (cols %d, srf %d)\n",
-    tm_1 - tm_0, tm_2 - tm_1, tm_3 - tm_2, tm_4 - tm_3, tm_5 - tm_4, tm_6 - tm_5, tm_colprocess, tm_srfspan);
+  printf("2 %d rfaces (%d clipped)\n", rface_next_id_0 + (MAX_RASTER_FACES - rface_next_id_1),num_clipped);
+  printf("3 trsf %d, loc %d, vis %d, vfc %d, render %d, spans %d (cols %d, srf %d, api %d)\n",
+    tm_1 - tm_0, tm_2 - tm_1, tm_3 - tm_2, tm_4 - tm_3, tm_5 - tm_4, tm_6 - tm_5, tm_colprocess, tm_srfspan, tm_api);
 #endif
 
 }
