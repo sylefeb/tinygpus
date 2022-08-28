@@ -33,12 +33,11 @@ typedef struct {
 } t_qrtexs;
 
 // array of texturing data
-#define MAX_RASTER_FACES 500
+#define MAX_RASTER_FACES 300
 t_qrtexs          rtexs[MAX_RASTER_FACES];
 // array of projected vertices
-#define MAX_PRJ_VERTICES 128
-p2d prj_vertices_0[MAX_PRJ_VERTICES];
-p2d prj_vertices_1[MAX_PRJ_VERTICES];
+p2d prj_vertices_0[n_max_verts];
+p2d prj_vertices_1[n_max_verts];
 // raster face ids within frame
 volatile int rface_next_id_0;
 volatile int rface_next_id_1;
@@ -58,7 +57,7 @@ frustum frustum_trsf; // frustum transformed in world space
 
 unsigned short vislist[n_max_vislen]; // stores the current vislist
 
-int memchunk[3000]; // a memory chunk to load data in and work with
+int memchunk[3192]; // a memory chunk to load data in and work with
 
 // -----------------------------------------------------
 // Rotations
@@ -193,6 +192,7 @@ static inline void project(const p3d* pt, p2d *pr)
 {
   // perspective z division
 	int z     = (int)pt->z;
+  // int inv_z = z != 0 ? ((1 << 16) / z) : (1 << 16);
   int inv_z = z != 0 ? ((1 << 16) / z) : (1 << 16);
   pr->x = (short)((((int)pt->x * inv_z) >> 8) + SCREEN_WIDTH  / 2);
   pr->y = (short)((((int)pt->y * inv_z) >> 8) + SCREEN_HEIGHT / 2);
@@ -271,7 +271,6 @@ void render_spans(int c, int ispan)
       COLDRAW_PLANE_B(rtexs[span->fid].rtex.ded, dr),
       COLDRAW_COL(tid, span->ys, span->ye, 15) | PLANE
     );
-
     // light map
     col_send(
       PARAMETER_PLANE_A(n->y,u->y,v->y),

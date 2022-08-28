@@ -379,11 +379,11 @@ $$end
       sameas(current) pixcoord <:: current;
       //sameas(current) pixcoord <:: current;
       colbufs.addr1       = { buffer,pixcoord[0,$doomchip_height_p2$] };
-      colbufs.wdata1      = ~lmapmode ?
-      { (light[4,1] ? 4b0 : light[0,4]) | (bkg ? 4d15 : 4d0), sampler_io.texel }
-    : { sampler_io.texel[4,4], 8b0 };
-      colbufs.wenable1    = {3{smplr_delay[$delay_bit$,1] & depth_ok & opaque}}
-                          & {3{1b1,~lmapmode,~lmapmode}};
+      colbufs.wdata1      = ~lmapmode
+    ? { {(light[4,1] ? 4b0 : light[0,4]) | (bkg ? 4d15 : 4d0) , 4b0}, sampler_io.texel }
+    : { sampler_io.texel, 8b0 };
+      colbufs.wenable1    = {4{smplr_delay[$delay_bit$,1] & depth_ok & opaque}}
+                          & {2b11,~lmapmode,~lmapmode};
       // ---- read/write to depth buffer
       depths.addr0        = pixcoord;
       depths.addr1        = pixcoord;
@@ -547,7 +547,7 @@ $include('../../../demos/build/palette666.si')
 unit column_sender(
   input  uint1                in_start(0), // pulse
   input  uint1                buffer,   // buffer to send (we have two)
-  simple_dualport_bram_port0 colbufs,
+  simple_dualport_bram_port0  colbufs,
   input   uint1               screen_ready,
   output! uint1               screen_valid(0),
   output! uint16              screen_data,
@@ -563,7 +563,7 @@ unit column_sender(
 
   always {
     // light level adjustment
-    uint4  light(0);
+    uint8  light(0);
 
     {      // stage 0
       count         = in_start ? 0 : ((hold | ~active) ? count : count + 1);
@@ -574,18 +574,24 @@ unit column_sender(
       colbufs.addr0 = { buffer, count[0,$doomchip_height_p2$] };
     } -> { // stage 1
       // lookup next color in palette
-      light         = hold ? light        : colbufs.rdata0[8,4];
+      light         = hold ? light        : colbufs.rdata0[8,8];
       palette.addr  = hold ? palette.addr : colbufs.rdata0[0,8];
     } -> { // stage 2
-      uint4 prev_light(0);
-      uint10 ro(0); uint10 go(0); uint10 bo(0);
+      uint8 prev_light(0);
+      uint14 ro(0); uint14 go(0); uint14 bo(0);
+      uint10 hr(0); uint10 lr(0);
+      uint10 hg(0); uint10 lg(0);
+      uint10 hb(0); uint10 lb(0);
       pal           = hold ? pal        : palette.rdata;
       light         = hold ? prev_light : light;
       active        = hold | active;
       prev_light    = light;
       // final r,g,b values
-      ro = pal[12,6] * light; go = pal[ 6,6] * light; bo = pal[0,6] * light;
-      r  = ro >> 4; g  = go >> 4; b  = bo >> 4;
+      lr = pal[12,6] * light[0,4]; hr = pal[12,6] * light[4,4];
+      lg = pal[ 6,6] * light[0,4]; hg = pal[ 6,6] * light[4,4];
+      lb = pal[ 0,6] * light[0,4]; hb = pal[ 0,6] * light[4,4];
+      ro = lr + {hr,4b0}; go = lg + {hg,4b0}; bo = lb + {hb,4b0};
+      r  = ro >> 8;       g  = go >> 8;       b  = bo >> 8;
     } -> { // stage 3
       screen_valid  = active;
       hold         ^= active & ~screen_ready;
@@ -624,7 +630,7 @@ $$end
   // column double buffers
   // - first  [0                    .. 2^doomchip_height_p2-1    ]
   // - second [2^doomchip_height_p2 .. 2^(doomchip_height_p2+1)-1]
-  simple_dualport_bram uint12 colbufs<"simple_dualport_bram_wmask_half_bytes">[$1<<(doomchip_height_p2+1)$] = uninitialized;
+  simple_dualport_bram uint16 colbufs<"simple_dualport_bram_wmask_half_bytes">[$1<<(doomchip_height_p2+1)$] = uninitialized;
   //                   ^^^^^^ { light , palette id }
 
   span_drawer drawer<reginputs>(

@@ -8,27 +8,23 @@ import curses
 from pynput import keyboard
 
 active  = 1
-ser     = serial.Serial('COM3', 115200, timeout=0)
 command = 0
 
 def on_press(key):
   global ser,command
-  try:
-    if key.char == 'w':
-      command = command | 1
-    if key.char == 's':
-      command = command | 2
-    if key.char == 'd':
-      command = command | 4
-    if key.char == 'a':
-      command = command | 8
-    if key.char == 'e':
-      command = command | 16
-    if key.char == 'q':
-      command = command | 32
-    ser.write(command.to_bytes(1,'big'))
-  except AttributeError:
-    print('special key {0} pressed'.format(key))
+  if key == keyboard.Key.up:
+    command = command | 1
+  if key == keyboard.Key.down:
+    command = command | 2
+  if key == keyboard.Key.right:
+    command = command | 4
+  if key == keyboard.Key.left:
+    command = command | 8
+  if key == keyboard.Key.page_up:
+    command = command | 16
+  if key == keyboard.Key.page_down:
+    command = command | 32
+  ser.write(command.to_bytes(1,'big'))
 
 def on_release(key):
   global active,ser,command
@@ -37,28 +33,32 @@ def on_release(key):
     print('active ',active)
     active = 0
     return False
-  if key.char == 'w':
+  if key == keyboard.Key.up:
     command = command & (~1)
-  if key.char == 's':
+  if key == keyboard.Key.down:
     command = command & (~2)
-  if key.char == 'd':
+  if key == keyboard.Key.right:
     command = command & (~4)
-  if key.char == 'a':
+  if key == keyboard.Key.left:
     command = command & (~8)
-  if key.char == 'e':
+  if key == keyboard.Key.page_up:
     command = command & (~16)
-  if key.char == 'q':
+  if key == keyboard.Key.page_down:
     command = command & (~32)
   ser.write(command.to_bytes(1,'big'))
 
 def main(argv0, dev, data_fn=''):
+  global ser
 
-  stdscr = curses.initscr()
-  curses.noecho()
-  curses.cbreak()
-  stdscr.keypad(True)
-  stdscr.nodelay(1)
-  
+#  stdscr = curses.initscr()
+#  curses.noecho()
+#  curses.cbreak()
+#  stdscr.keypad(True)
+#  stdscr.nodelay(1)
+#  stdscr.clear()
+ 
+  ser = serial.Serial(dev, 115200, timeout=0)
+
   ser.write(b'\x00')
   
   listener = keyboard.Listener(
@@ -66,7 +66,6 @@ def main(argv0, dev, data_fn=''):
       on_release=on_release)
   listener.start()
   
-  stdscr.clear()
   
   str = ''
   while active == 1:
@@ -75,11 +74,11 @@ def main(argv0, dev, data_fn=''):
     if len(str) > 0:
       if str[-1] == '\n':
         try:
-          if ord(str[0]) - ord('0') < 10:
-            stdscr.addstr(ord(str[0]) - ord('0'), 0, str[1:])
-          else:
-            stdscr.addstr(20, 0, str[1:])
-          stdscr.refresh()
+          #if ord(str[0]) - ord('0') < 10:
+          #  stdscr.addstr(ord(str[0]) - ord('0'), 0, str[1:])
+          #else:
+          #  stdscr.addstr(20, 0, str[1:])
+          #stdscr.refresh()
           str = ''
         except:
           print('error: ',str)
@@ -87,10 +86,10 @@ def main(argv0, dev, data_fn=''):
   listener.stop()
   ser.close()
 
-  curses.nocbreak()
-  stdscr.keypad(False)
-  curses.echo()
-  curses.endwin()
+#  curses.nocbreak()
+#  stdscr.keypad(False)
+#  curses.echo()
+#  curses.endwin()
   
   return 0
 
