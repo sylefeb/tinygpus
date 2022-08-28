@@ -13,7 +13,7 @@
 $$SIMUL_QPSRAM=nil
 
 $$if MCH2022 or (SIMULATION and SIMUL_QPSRAM) then
-  // overclocking at 60 MHz seems to be fine
+  // overclocking at 66 MHz seems to be fine
   $$master_freq = 66
   $$uart_in_clock_freq_mhz = master_freq//2
   $include('../../common/qpsram2x.si')
@@ -488,6 +488,70 @@ $$end
             cmdq.in_command[ 0,32] = prev_mem_wdata[0,32];
             // store in fifo
             cmdq.in_add = 1;
+          }
+        }
+        case 4b1000: { // GPU commands in part
+          switch (prev_mem_addr[6,4]) {
+            // tex0 PARAMETER_PLANE_A     (2<<30) | ((ny) & 1023)  | (((uy) & 1023)<<10) | (((vy) & 1023)<<20)
+            case 0: { // PARAMETER_PLANE_A_ny
+              cmdq.in_command[$32+ 0$,10] = prev_mem_wdata[0,10];
+            }
+            case 1: { // PARAMETER_PLANE_A_uy
+              cmdq.in_command[$32+10$,10] = prev_mem_wdata[0,10];
+            }
+            case 2: { // PARAMETER_PLANE_A_vy
+              cmdq.in_command[$32+20$,10] = prev_mem_wdata[0,10];
+              cmdq.in_command[$32+30$, 2] = 2b10;
+            }
+            // tex1 PARAMETER_PLANE_A_EX  (((du) & 16383)<<1) | (((dv) & 16383)<<15) | PARAMETER
+            case 3: { // PARAMETER_PLANE_A_EX_du
+              cmdq.in_command[$ 0+ 0$,17] = {prev_mem_wdata[0,16],1b0/*reset eoc*/};
+            }
+            case 4: { // PARAMETER_PLANE_A_EX_dv
+              cmdq.in_command[$ 0+15$,16] = prev_mem_wdata[0,16];
+              // store in fifo
+              cmdq.in_command[$ 0+30$, 2] = 2b11; // PARAMETER
+              cmdq.in_add = 1;
+            }
+            // tex0 PARAMETER_UV_OFFSET    (1<<30) | ((vo) & 16777215)
+            case 5: { // PARAMETER_UV_OFFSET_v
+              cmdq.in_command[$32+ 0$,24] = prev_mem_wdata[0,24];
+              cmdq.in_command[$32+30$, 2] = 2b01;
+            }
+            // tex1 PARAMETER_UV_OFFSET_EX (((uo) & 16777215)<<1) | PARAMETER
+            // #define LIGHTMAP_EN (1<<25)
+            case 6: { // PARAMETER_UV_OFFSET_EX_u
+              cmdq.in_command[$ 0+ 1$,24] = prev_mem_wdata[0,24];
+            }
+            case 7: { // PARAMETER_UV_OFFSET_EX_lmap
+              cmdq.in_command[$ 0+25$, 1] = prev_mem_wdata[0,1];
+              // store in fifo
+              cmdq.in_command[$ 0+30$, 2] = 2b11; // PARAMETER
+              cmdq.in_add = 1;
+            }
+            // tex0 COLDRAW_PLANE_B ((ded) & 65535) | ((dr) << 16)
+            case 8: { // COLDRAW_PLANE_B_ded
+              cmdq.in_command[$32+ 0$,16] = prev_mem_wdata[0,16];
+            }
+            case 9: { // COLDRAW_PLANE_B_dr
+              cmdq.in_command[$32+16$,16] = prev_mem_wdata[0,16];
+            }
+            // tex1 COLDRAW_COL ((idx) | ((start&255)<<10) | ((end/*>=0*/)<<18) | ((light)<<26)) | PLANE
+            case 10: { // COLDRAW_COL_texid
+              cmdq.in_command[$ 0+ 0$,10] = prev_mem_wdata[0,10];
+            }
+            case 11: { // COLDRAW_COL_start
+              cmdq.in_command[$ 0+10$, 8] = prev_mem_wdata[0, 8];
+            }
+            case 12: { // COLDRAW_COL_end
+              cmdq.in_command[$ 0+18$, 8] = prev_mem_wdata[0, 8];
+              // store in fifo
+              cmdq.in_command[$ 0+30$, 2] = 2b01; // PLANE
+              cmdq.in_add = 1;
+            }
+            case 13: { // COLDRAW_COL_light
+              cmdq.in_command[$ 0+26$, 4] = prev_mem_wdata[0, 4];
+            }
           }
         }
         default: { }

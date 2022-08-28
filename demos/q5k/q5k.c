@@ -23,7 +23,7 @@ int time()    { return 0; }
 #include "frustum.c"
 #include "q.h"
 
-#define DEBUG
+// #define DEBUG
 // ^^^^^^^^^^^^ uncomment to get profiling info over UART
 
 const int z_clip = 64; // near z clipping plane
@@ -40,7 +40,7 @@ typedef struct {
 } t_qrtexs;
 
 // array of texturing data
-#define MAX_RASTER_FACES 450
+#define MAX_RASTER_FACES 500
 t_qrtexs          rtexs[MAX_RASTER_FACES];
 
 // -----------------------------------------------------
@@ -64,7 +64,9 @@ frustum frustum_trsf; // frustum transformed in world space
 
 unsigned short vislist[n_max_vislen]; // stores the current vislist
 
-int memchunk[3192]; // a memory chunk to load data in and work with
+#define memchunk_size (8+(n_max_leaf_size>>1))
+int memchunk[memchunk_size]; // a memory chunk to load data in and work with
+//              ^^^^ we have to hold two leafs (core0/core1)
 
 // -----------------------------------------------------
 
@@ -263,12 +265,17 @@ void render_spans(int c, int ispan)
     tm_srfspan += tm_ap - tm_ss;
 #endif
 
+#if 0
     // bind the surface to the rasterizer
     col_send(
       PARAMETER_PLANE_A(n->y,u->y,v->y),
       PARAMETER_PLANE_A_EX(du,dv) | PARAMETER
     );
-    rconvex_texturing_bind(&rtexs[span->fid].rtex); /// TODO: move after surface_setup_span_nuv
+    // rconvex_texturing_bind
+    col_send(
+      PARAMETER_UV_OFFSET(rtexs[span->fid].rtex.v_offs),
+      PARAMETER_UV_OFFSET_EX(rtexs[span->fid].rtex.u_offs) | PARAMETER
+    );
     // column drawing
     col_send(
       COLDRAW_PLANE_B(rtexs[span->fid].rtex.ded, dr),
@@ -279,13 +286,45 @@ void render_spans(int c, int ispan)
       PARAMETER_PLANE_A(n->y,u->y,v->y),
       PARAMETER_PLANE_A_EX(du,dv) | PARAMETER
     );
-    rconvex_texturing_bind_lightmap(&rtexs[span->fid]);
+    // rconvex_texturing_bind_lightmap
+    col_send(
+      PARAMETER_UV_OFFSET(rtexs[span->fid].lv_offs),
+      PARAMETER_UV_OFFSET_EX(rtexs[span->fid].lu_offs) | PARAMETER | LIGHTMAP_EN
+    );
     // column drawing
     col_send(
       COLDRAW_PLANE_B(rtexs[span->fid].rtex.ded, dr),
       COLDRAW_COL(lid, span->ys, span->ye, 15) | PLANE
     );
-
+#else
+    *PARAMETER_PLANE_A_ny = n->y;
+    *PARAMETER_PLANE_A_uy = u->y;
+    *PARAMETER_PLANE_A_vy = v->y;
+    *PARAMETER_PLANE_A_EX_du = du;
+    *PARAMETER_PLANE_A_EX_dv = dv;
+    *PARAMETER_UV_OFFSET_v    = rtexs[span->fid].rtex.v_offs;
+    *PARAMETER_UV_OFFSET_EX_u = rtexs[span->fid].rtex.u_offs;
+    *PARAMETER_UV_OFFSET_EX_lmap = 0;
+    *COLDRAW_PLANE_B_ded = rtexs[span->fid].rtex.ded;
+    *COLDRAW_PLANE_B_dr  = dr;
+    *COLDRAW_COL_texid   = tid;
+    *COLDRAW_COL_start   = span->ys;
+    *COLDRAW_COL_end     = span->ye;
+    //
+    *PARAMETER_PLANE_A_ny = n->y;
+    *PARAMETER_PLANE_A_uy = u->y;
+    *PARAMETER_PLANE_A_vy = v->y;
+    *PARAMETER_PLANE_A_EX_du = du;
+    *PARAMETER_PLANE_A_EX_dv = dv;
+    *PARAMETER_UV_OFFSET_v    = rtexs[span->fid].lv_offs;
+    *PARAMETER_UV_OFFSET_EX_u = rtexs[span->fid].lu_offs;
+    *PARAMETER_UV_OFFSET_EX_lmap = 1;
+    *COLDRAW_PLANE_B_ded = rtexs[span->fid].rtex.ded;
+    *COLDRAW_PLANE_B_dr  = dr;
+    *COLDRAW_COL_texid   = lid;
+    *COLDRAW_COL_start   = span->ys;
+    *COLDRAW_COL_end     = span->ye;
+#endif
     // process pending column commands
 #ifdef DEBUG
     unsigned int tm_cp = time();
@@ -422,9 +461,9 @@ void getLeaf(int leaf,volatile int **p_dst)
   if (length & 3) { // ensures we get the last bytes
     length += 4;
   }
-  //printf("reading leaf %d from %d len %d\n",leaf,offset,length);
+  // printf("4 reading leaf %d from %d len %d\n",leaf,offset,length);
   spiflash_copy(offset, *p_dst, length);
-  *p_dst += length;
+  *p_dst += (length>>2); // int pointer, hence >>2
 }
 
 // -----------------------------------------------------
@@ -651,7 +690,6 @@ void renderLeaves(int len)
       renderLeaf(0,(const unsigned char*)second);
       while (core1_done != 1) {} // wait for core 1
     }
-    //printf("%d bytes\n", (int)dst - (int)memchunk);
   }
 }
 
@@ -821,7 +859,7 @@ void main_0()
 #ifdef EMUL
   v_angle_y += 64;
 #else
-  v_angle_y = 2048; // 1024;
+  v_angle_y = 0;
 #endif
   int v_start = view.z - 1000;
   int v_end   = view.z + 2100;
