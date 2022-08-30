@@ -23,7 +23,7 @@ int time()    { return 0; }
 #include "frustum.c"
 #include "q.h"
 
-// #define DEBUG
+#define DEBUG
 // ^^^^^^^^^^^^ uncomment to get profiling info over UART
 
 const int z_clip = 64; // near z clipping plane
@@ -125,9 +125,10 @@ static inline void rot_x(int angle, short *x, short *y, short *z)
 // -----------------------------------------------------
 
 // frame
-int frame = 0;
-int tm_frame = 0;
-int v_angle_y = 0;
+int frame;
+int tm_frame;
+int v_angle_y;
+int v_angle_x;
 
 #ifdef DEBUG
 unsigned int tm_colprocess;
@@ -199,16 +200,12 @@ static inline void transform(short *x, short *y, short *z, short w)
     *z -= view.z;
   }
   rot_y(v_angle_y, x, y, z);
-#ifndef EMUL
-  // rot_z(v_angle_y<<1, x, y, z);
-#endif
+  rot_x(v_angle_x, x, y, z);
 }
 
 static inline void inv_transform(short *x, short *y, short *z, short w)
 {
-#ifndef EMUL
-  // rot_z(-v_angle_y<<1, x, y, z);
-#endif
+  rot_x(-v_angle_x, x, y, z);
   rot_y(-v_angle_y, x, y, z);
   if (w != 0) {
     *x += view.x;
@@ -221,7 +218,6 @@ static inline void project(const p3d* pt, p2d *pr)
 {
   // perspective z division
 	int z     = (int)pt->z;
-  // int inv_z = z != 0 ? ((1 << 16) / z) : (1 << 16);
   int inv_z = z != 0 ? ((1 << 16) / z) : (1 << 16);
   pr->x = (short)((((int)pt->x * inv_z) >> 8) + SCREEN_WIDTH  / 2);
   pr->y = (short)((((int)pt->y * inv_z) >> 8) + SCREEN_HEIGHT / 2);
@@ -238,28 +234,32 @@ static inline void unproject(const p2d *pr,short z,p3d* pt)
 
 void render_spans(int c, int ispan)
 {
+  // pixel pos (x,z)
+  int rz = 256;
+  int rx = c - SCREEN_WIDTH / 2;
+  // go through span list
   while (ispan) {
     t_span *span = span_pool + ispan;
-    // pixel pos
-    int rz = 256;
-    int rx = c - SCREEN_WIDTH / 2;
+    // pixel pos (y)
     int ry = span->ys - SCREEN_HEIGHT / 2;
 
 #ifdef DEBUG
     unsigned int tm_ss = time();
 #endif
-    // setup the surface span parameters
+
+    // surface_setup_span_nuv
     int nid = rtexs[span->fid].nrm_id;
     int sid = rtexs[span->fid].tvc_id;
-    int tid = rtexs[span->fid].tex_id;
-    int lid = rtexs[span->fid].lmap_id;
-    // surface_setup_span_nuv
     const p3d *n = &trsf_normals[nid];
     const p3d *u = &trsf_texvecs[sid].vecS;
     const p3d *v = &trsf_texvecs[sid].vecT;
     int dr = dot3( rx,ry,rz, n->x,n->y,n->z )>>8;
     int du = dot3( rx,ry,rz, u->x,u->y,u->z )>>8;
     int dv = dot3( rx,ry,rz, v->x,v->y,v->z )>>8;
+    // texture ids
+    int tid = rtexs[span->fid].tex_id;
+    int lid = rtexs[span->fid].lmap_id;
+
 #ifdef DEBUG
     unsigned int tm_ap = time();
     tm_srfspan += tm_ap - tm_ss;
@@ -297,19 +297,20 @@ void render_spans(int c, int ispan)
       COLDRAW_COL(lid, span->ys, span->ye, 15) | PLANE
     );
 #else
-    *PARAMETER_PLANE_A_ny = n->y;
-    *PARAMETER_PLANE_A_uy = u->y;
-    *PARAMETER_PLANE_A_vy = v->y;
-    *PARAMETER_PLANE_A_EX_du = du;
-    *PARAMETER_PLANE_A_EX_dv = dv;
+    *PARAMETER_PLANE_A_ny     = n->y;
+    *PARAMETER_PLANE_A_uy     = u->y;
+    *PARAMETER_PLANE_A_vy     = v->y;
+    *PARAMETER_PLANE_A_EX_du  = du;
+    *PARAMETER_PLANE_A_EX_dv  = dv;
     *PARAMETER_UV_OFFSET_v    = rtexs[span->fid].rtex.v_offs;
     *PARAMETER_UV_OFFSET_EX_u = rtexs[span->fid].rtex.u_offs;
     *PARAMETER_UV_OFFSET_EX_lmap = 0;
-    *COLDRAW_PLANE_B_ded = rtexs[span->fid].rtex.ded;
-    *COLDRAW_PLANE_B_dr  = dr;
-    *COLDRAW_COL_texid   = tid;
-    *COLDRAW_COL_start   = span->ys;
-    *COLDRAW_COL_end     = span->ye;
+    *COLDRAW_PLANE_B_ded      = rtexs[span->fid].rtex.ded;
+    *COLDRAW_PLANE_B_dr       = dr;
+    *COLDRAW_COL_texid        = tid;
+    // *COLDRAW_COL_light   = 15;
+    *COLDRAW_COL_start        = span->ys;
+    *COLDRAW_COL_end          = span->ye;
     //
     *PARAMETER_PLANE_A_ny = n->y;
     *PARAMETER_PLANE_A_uy = u->y;
@@ -342,7 +343,10 @@ void render_spans(int c, int ispan)
 
 // -----------------------------------------------------
 
+volatile int vfc_len;
+
 void renderLeaf(int core,const unsigned char *ptr);
+void frustumTest(int first,int last);
 
 volatile int core1_todo;
 volatile int core1_done;
@@ -355,10 +359,19 @@ void main_1()
   while (1) {
 
     // wait for the order
-    while (core1_todo != 1) {}
+    while (core1_todo == 0) {}
+    int todo = core1_todo;
     core1_todo = 0;
-    // render the other leaf
-    renderLeaf(1,(const unsigned char*)memchunk);
+    switch (todo) {
+      case 1:
+        // render the other leaf
+        renderLeaf(1,(const unsigned char*)memchunk);
+        break;
+      case 2:
+        // frustum vis on other half
+        frustumTest((vfc_len>>1)+1,vfc_len-1);
+        break;
+    }
     // sync
     core1_done = 1;
 
@@ -434,12 +447,12 @@ int readLeafVisList(int leaf)
 
 // -----------------------------------------------------
 
-void frustumTest(int len)
+void frustumTest(int first,int last)
 {
   int num_culled  = 0;
   int num_visible = 0;
-  const aabb *bx = (const aabb *)memchunk;
-  for (int i = 0; i < len; ++i) {
+  const aabb *bx = (const aabb *)memchunk + first;
+  for (int i = first; i <= last; ++i) {
     if (!frustum_aabb_overlap(bx, &frustum_trsf)) {
       vislist[i] = 65535; // tag as not visible
       ++num_culled;
@@ -470,14 +483,13 @@ void getLeaf(int leaf,volatile int **p_dst)
 
 void renderLeaf(int core,const unsigned char *ptr)
 {
-  if (ptr == 0) return;
+  if (ptr == 0) {
+    return;
+  }
   // select temporary table
   p2d *prj_vertices;
-  if (core == 0) {
-    prj_vertices = prj_vertices_0;
-  } else {
-    prj_vertices = prj_vertices_1;
-  }
+  if (core == 0) { prj_vertices = prj_vertices_0;
+  } else         { prj_vertices = prj_vertices_1; }
   // num vertices
   int numv = *(const int*)ptr;
   ptr += sizeof(int);
@@ -628,6 +640,49 @@ void renderLeaf(int core,const unsigned char *ptr)
       if (core == 0) { --rface_next_id_0; } else { ++rface_next_id_1; }
       continue;
     }
+#if 1
+    if (core_id() == 0) {
+      if (span_alloc_0 + (rtri.last_x - rtri.x + 1) >= span_alloc_1) {
+        return;
+      }
+      for (int c = rtri.x; c <= rtri.last_x; ++c) {
+        rconvex_step(&rtri, num_idx, ptr_indices, ptr_prj_vertices);
+        //if (rtri.ys < rtri.ye) {
+        /// TODO: ^^^^^^^^ clearly there are still some reverted spans, ^
+        ///       but filtering is too expensive
+        // insert span record
+        t_span *span;
+        int ispan = ++span_alloc_0; // span 0 unused, tags empty
+        span = span_pool + ispan;
+        span->next = span_heads_0[c];
+        span_heads_0[c] = ispan;
+        // set span data
+        span->ys = (unsigned char)rtri.ys;
+        span->ye = (unsigned char)rtri.ye;
+        span->fid = fc;
+        //}
+      }
+    } else {
+      if (span_alloc_1 - (rtri.last_x - rtri.x + 1) <= span_alloc_0) {
+        return;
+      }
+      for (int c = rtri.x; c <= rtri.last_x; ++c) {
+        rconvex_step(&rtri, num_idx, ptr_indices, ptr_prj_vertices);
+        //if (rtri.ys < rtri.ye) {
+        // insert span record
+        t_span *span;
+        int ispan = --span_alloc_1;
+        span = span_pool + ispan;
+        span->next = span_heads_1[c];
+        span_heads_1[c] = ispan;
+        // set span data
+        span->ys = (unsigned char)rtri.ys;
+        span->ye = (unsigned char)rtri.ye;
+        span->fid = fc;
+        //}
+      }
+    }
+#else
     for (int c = rtri.x; c <= rtri.last_x; ++c) {
       rconvex_step(&rtri, num_idx, ptr_indices, ptr_prj_vertices);
       // insert span
@@ -651,6 +706,7 @@ void renderLeaf(int core,const unsigned char *ptr)
         span->fid = fc;
       }
     }
+#endif
   }
 }
 
@@ -740,25 +796,28 @@ static inline void render_frame()
   /// locate current leaf
   //*LEDS = 2;
   unsigned short leaf = locate_leaf();
-  // printf("5 view %d,%d,%d (%d) in leaf %d\n", view.x, view.y, view.z, v_angle_y, leaf);
+  printf("5 view %d,%d,%d (%d, %d) in leaf %d\n", view.x, view.y, view.z, v_angle_y, v_angle_x, leaf);
   /// get visibility list
 #ifdef DEBUG
   unsigned int tm_2 = time();
 #endif
   //*LEDS = 3;
-  int len = readLeafVisList(leaf);
+  vfc_len = readLeafVisList(leaf);
   /// check frustum - aabb
 #ifdef DEBUG
   unsigned int tm_3 = time();
 #endif
   //*LEDS = 4;
-  frustumTest(len);
+  core1_done = 0;
+  core1_todo = 2; // request core 1 assistance
+  frustumTest(0,vfc_len>>1);
+  while (core1_done != 1) {} // wait for core 1
   /// render visible leaves
 #ifdef DEBUG
   unsigned int tm_4 = time();
 #endif
   //*LEDS = 5;
-  renderLeaves(len);
+  renderLeaves(vfc_len);
 
 #ifdef DEBUG
   unsigned int tm_5 = time();
@@ -847,7 +906,7 @@ void main_0()
     span_heads_1[i] = 0;
   }
 
-  // prepare the frustum
+  // prepare the frustum (slow)
   frustum_pre(&frustum_view, unproject, z_clip);
 
   // --------------------------
@@ -860,18 +919,16 @@ void main_0()
   v_angle_y += 64;
 #else
   v_angle_y = 0;
+  v_angle_x = 0;
 #endif
   int v_start = view.z - 1000;
   int v_end   = view.z + 2100;
   int v_step  = 1;
 
-  view.x =  1920;
-  view.y =   310;
-  view.z =  -926;
-
-  //view.x =  5042;
-  //view.y = -1469;
-  //view.z =  7169;
+  // view.x = 1920; view.y =  310;  view.z = -926; // e1m1
+  // view.x = 3596; view.y = 3790;  view.z = 1719; // e1m4
+  // view.x = 1918; view.y = 286;  view.z = 1295; // e1m6
+  view.x = 5003; view.y = -1417;  view.z = 5956; v_angle_y=-10448; v_angle_x=209; // lmap
 
   while (1) {
 
@@ -905,34 +962,12 @@ void main_0()
     if (prev_uart_byte & 32) {
       view.y -= speed;
     }
-
-#if 0
-#ifndef EMUL
-    // walk back and forth
-    if (elapsed < 0) { elapsed = 1; }
-    int speed   = (elapsed >> 17);
-    view.z     += v_step * speed;
-    if (view.z > v_end) {
-      v_step = 0;
-      if (v_angle_y < 2048) {
-        v_angle_y += speed<<2;
-      } else {
-        v_angle_y = 2048;
-        view.z    = v_end;
-        v_step    = -1;
-      }
-    } else if (view.z < v_start) {
-      v_step = 0;
-      if (v_angle_y > 0) {
-        v_angle_y -= speed<<2;
-      } else {
-        v_angle_y = 0;
-        view.z = v_start;
-        v_step = 1;
-      }
+    if (prev_uart_byte & 64) {
+      v_angle_x += speed;
     }
-#endif
-#endif
+    if (prev_uart_byte & 128) {
+      v_angle_x -= speed;
+    }
 
     // next frame
     ++ frame;

@@ -24,6 +24,10 @@ def on_press(key):
     command = command | 16
   if key == keyboard.Key.page_down:
     command = command | 32
+  if key == keyboard.Key.home:
+    command = command | 64
+  if key == keyboard.Key.end:
+    command = command | 128
   ser.write(command.to_bytes(1,'big'))
 
 def on_release(key):
@@ -45,6 +49,10 @@ def on_release(key):
     command = command & (~16)
   if key == keyboard.Key.page_down:
     command = command & (~32)
+  if key == keyboard.Key.home:
+    command = command & (~64)
+  if key == keyboard.Key.end:
+    command = command & (~128)
   ser.write(command.to_bytes(1,'big'))
 
 def main(argv0, dev, data_fn=''):
