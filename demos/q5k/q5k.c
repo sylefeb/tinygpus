@@ -23,10 +23,10 @@ int time()    { return 0; }
 #include "frustum.c"
 #include "q.h"
 
-#define DEBUG
+// #define DEBUG
 // ^^^^^^^^^^^^ uncomment to get profiling info over UART
 
-const int z_clip = 64; // near z clipping plane
+const int z_clip = 128; // near z clipping plane
 
 // -----------------------------------------------------
 
@@ -647,20 +647,18 @@ void renderLeaf(int core,const unsigned char *ptr)
       }
       for (int c = rtri.x; c <= rtri.last_x; ++c) {
         rconvex_step(&rtri, num_idx, ptr_indices, ptr_prj_vertices);
-        //if (rtri.ys < rtri.ye) {
-        /// TODO: ^^^^^^^^ clearly there are still some reverted spans, ^
-        ///       but filtering is too expensive
-        // insert span record
-        t_span *span;
-        int ispan = ++span_alloc_0; // span 0 unused, tags empty
-        span = span_pool + ispan;
-        span->next = span_heads_0[c];
-        span_heads_0[c] = ispan;
-        // set span data
-        span->ys = (unsigned char)rtri.ys;
-        span->ye = (unsigned char)rtri.ye;
-        span->fid = fc;
-        //}
+        if (rtri.ys < rtri.ye) {
+          // insert span record
+          t_span *span;
+          int ispan = ++span_alloc_0; // span 0 unused, tags empty
+          span = span_pool + ispan;
+          span->next = span_heads_0[c];
+          span_heads_0[c] = ispan;
+          // set span data
+          span->ys = (unsigned char)rtri.ys;
+          span->ye = (unsigned char)rtri.ye;
+          span->fid = fc;
+        }
       }
     } else {
       if (span_alloc_1 - (rtri.last_x - rtri.x + 1) <= span_alloc_0) {
@@ -668,18 +666,18 @@ void renderLeaf(int core,const unsigned char *ptr)
       }
       for (int c = rtri.x; c <= rtri.last_x; ++c) {
         rconvex_step(&rtri, num_idx, ptr_indices, ptr_prj_vertices);
-        //if (rtri.ys < rtri.ye) {
-        // insert span record
-        t_span *span;
-        int ispan = --span_alloc_1;
-        span = span_pool + ispan;
-        span->next = span_heads_1[c];
-        span_heads_1[c] = ispan;
-        // set span data
-        span->ys = (unsigned char)rtri.ys;
-        span->ye = (unsigned char)rtri.ye;
-        span->fid = fc;
-        //}
+        if (rtri.ys < rtri.ye) {
+          // insert span record
+          t_span *span;
+          int ispan = --span_alloc_1;
+          span = span_pool + ispan;
+          span->next = span_heads_1[c];
+          span_heads_1[c] = ispan;
+          // set span data
+          span->ys = (unsigned char)rtri.ys;
+          span->ye = (unsigned char)rtri.ye;
+          span->fid = fc;
+        }
       }
     }
 #else
@@ -796,7 +794,7 @@ static inline void render_frame()
   /// locate current leaf
   //*LEDS = 2;
   unsigned short leaf = locate_leaf();
-  printf("5 view %d,%d,%d (%d, %d) in leaf %d\n", view.x, view.y, view.z, v_angle_y, v_angle_x, leaf);
+  // printf("5 view %d,%d,%d (%d, %d) in leaf %d\n", view.x, view.y, view.z, v_angle_y, v_angle_x, leaf);
   /// get visibility list
 #ifdef DEBUG
   unsigned int tm_2 = time();
@@ -926,9 +924,10 @@ void main_0()
   int v_step  = 1;
 
   // view.x = 1920; view.y =  310;  view.z = -926; // e1m1
+  view.x = 498; view.y = -654;  view.z = 3090; v_angle_y=-48; v_angle_x=0; // e1m1 test
   // view.x = 3596; view.y = 3790;  view.z = 1719; // e1m4
   // view.x = 1918; view.y = 286;  view.z = 1295; // e1m6
-  view.x = 5003; view.y = -1417;  view.z = 5956; v_angle_y=-10448; v_angle_x=209; // lmap
+  // view.x = 5003; view.y = -1417;  view.z = 5956; v_angle_y=-10448; v_angle_x=209; // lmap
 
   while (1) {
 
