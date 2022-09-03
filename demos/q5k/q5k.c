@@ -794,7 +794,7 @@ static inline void render_frame()
   /// locate current leaf
   //*LEDS = 2;
   unsigned short leaf = locate_leaf();
-  // printf("5 view %d,%d,%d (%d, %d) in leaf %d\n", view.x, view.y, view.z, v_angle_y, v_angle_x, leaf);
+  printf("5 view %d,%d,%d (%d, %d) in leaf %d\n", view.x, view.y, view.z, v_angle_y, v_angle_x, leaf);
   /// get visibility list
 #ifdef DEBUG
   unsigned int tm_2 = time();
@@ -924,10 +924,11 @@ void main_0()
   int v_step  = 1;
 
   // view.x = 1920; view.y =  310;  view.z = -926; // e1m1
-  view.x = 498; view.y = -654;  view.z = 3090; v_angle_y=-48; v_angle_x=0; // e1m1 test
+  // view.x = 498; view.y = -654;  view.z = 3090; v_angle_y=-48; v_angle_x=0; // e1m1 test
   // view.x = 3596; view.y = 3790;  view.z = 1719; // e1m4
   // view.x = 1918; view.y = 286;  view.z = 1295; // e1m6
-  // view.x = 5003; view.y = -1417;  view.z = 5956; v_angle_y=-10448; v_angle_x=209; // lmap
+  // view.x = 5003; view.y = -1417;  view.z = 5956; v_angle_y=-10448; v_angle_x=209; // lmap in e1m1
+  view.x = -777; view.y = 400; view.z = -4572; v_angle_y=2956; v_angle_x=154; // e1m3
 
   while (1) {
 
