@@ -52,7 +52,7 @@ The demos are running both on the `icebreaker` board and the `MCH2022` badge.
 ___
 ### In simulation
 
-All demos can be run in simulation (verilator). Note that it takes a little bit of time before the rendering starts, as the full boot process (including loading code from SPIflash) is being simulating. During boot the screen remains black (on real hardware this delay is imperceptible).
+All demos run in simulation (verilator). Note that it takes a little bit of time before the rendering starts, as the full boot process (including loading code from SPIflash) is being simulating. During boot the screen remains black (on real hardware this delay is imperceptible).
 
 For the rotating tetrahedron demo:
 ```
