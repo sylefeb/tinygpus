@@ -16,7 +16,7 @@ The SOC instantiates six major components:
 
 - The CPU RAM, using the UP5K on-chip 128KB SPRAM and a small BRAM for booting
 
-<!-- MARKDOWN-AUTO-DOCS:START (CODE:src=../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si&syntax=c&lines=206-211) -->
+<!-- MARKDOWN-AUTO-DOCS:START (CODE:src=../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si&syntax=c&lines=208-213) -->
 <!-- The below code snippet is automatically added from ../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si -->
 ```c
   // ==============================
@@ -29,7 +29,7 @@ The SOC instantiates six major components:
 
 - The CPU ([my ice-v-dual CPU](https://github.com/sylefeb/Silice/blob/master/projects/ice-v/README.md))
 
-<!-- MARKDOWN-AUTO-DOCS:START (CODE:src=../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si&syntax=c&lines=213-219) -->
+<!-- MARKDOWN-AUTO-DOCS:START (CODE:src=../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si&syntax=c&lines=215-221) -->
 <!-- The below code snippet is automatically added from ../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si -->
 ```c
   // ==============================
@@ -43,7 +43,7 @@ The SOC instantiates six major components:
 
 - The GPU
 
-<!-- MARKDOWN-AUTO-DOCS:START (CODE:src=../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si&syntax=c&lines=221-225) -->
+<!-- MARKDOWN-AUTO-DOCS:START (CODE:src=../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si&syntax=c&lines=224-228) -->
 <!-- The below code snippet is automatically added from ../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si -->
 ```c
   );
@@ -56,7 +56,7 @@ The SOC instantiates six major components:
 
 - The GPU texture memory
 
-<!-- MARKDOWN-AUTO-DOCS:START (CODE:src=../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si&syntax=c&lines=272-278) -->
+<!-- MARKDOWN-AUTO-DOCS:START (CODE:src=../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si&syntax=c&lines=274-280) -->
 <!-- The below code snippet is automatically added from ../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si -->
 ```c
   // ==============================
@@ -70,7 +70,7 @@ $if MCH2022 or (SIMULATION and SIMUL_QPSRAM) then
 
 - The GPU command queue
 
-<!-- MARKDOWN-AUTO-DOCS:START (CODE:src=../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si&syntax=c&lines=320-322) -->
+<!-- MARKDOWN-AUTO-DOCS:START (CODE:src=../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si&syntax=c&lines=336-338) -->
 <!-- The below code snippet is automatically added from ../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si -->
 ```c
 $if SIMULATION then
@@ -80,7 +80,7 @@ $if SIMULATION then
 
 - The screen controller and screen driver
 
-<!-- MARKDOWN-AUTO-DOCS:START (CODE:src=../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si&syntax=c&lines=227-237) -->
+<!-- MARKDOWN-AUTO-DOCS:START (CODE:src=../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si&syntax=c&lines=230-240) -->
 <!-- The below code snippet is automatically added from ../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si -->
 ```c
                 screen_ready <:   screen_ctrl.ready);
@@ -151,13 +151,14 @@ at offset 1MB and the textures at offset 2MB in the flash memory.
 ###  Do not cross the streams
 
 Of course, since both the CPU and GPU may access flash memory, we have to be a bit
-careful. In our design however, things are quite simple: when the CPU boots,
-the GPU does nothing and thus is not accessing the memory. We can then have a
-very simple mechanism:
+careful. The SOC implements a mechanism so that the CPU can request memory
+transfers from SPIflash to its RAM, but the CPU has to ensure there is no
+ongoing GPU activity before using this. This is true at boot time or when the
+GPU reports an empty command queue, as indicated by bit 2 of `user_data`.
 
-First, note that the CPU is bound to a `texmem_io` group called `texio`:
+First, note that the GPU is bound to a `texmem_io` group called `txm_io`:
 
-<!-- MARKDOWN-AUTO-DOCS:START (CODE:src=../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si&syntax=c&lines=221-225) -->
+<!-- MARKDOWN-AUTO-DOCS:START (CODE:src=../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si&syntax=c&lines=224-228) -->
 <!-- The below code snippet is automatically added from ../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si -->
 ```c
   );
@@ -169,7 +170,7 @@ First, note that the CPU is bound to a `texmem_io` group called `texio`:
 <!-- MARKDOWN-AUTO-DOCS:END -->
 
 These variables are updated in the always block:
-<!-- MARKDOWN-AUTO-DOCS:START (CODE:src=../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si&syntax=c&lines=344-348) -->
+<!-- MARKDOWN-AUTO-DOCS:START (CODE:src=../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si&syntax=c&lines=366-371) -->
 <!-- The below code snippet is automatically added from ../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si -->
 ```c
 $else
@@ -179,12 +180,12 @@ $end
                       1b0,
 ```
 <!-- MARKDOWN-AUTO-DOCS:END -->
-As you can see, this connects `texio` to `txm` which is the flash memory unit itself:
+As you can see, this connects `txm_io` to `txm` which is the flash memory unit itself:
 `qpsram_ram txm...` (on mch2022) or `spiflash_rom_core` (on icebreaker).
 
-To access flash the CPU first uses memory mapping to set an address and start a
-read:
-<!-- MARKDOWN-AUTO-DOCS:START (CODE:src=../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si&syntax=c&lines=404-408) -->
+To access flash the CPU first uses memory mapping to set an address and initiate a
+transfer:
+<!-- MARKDOWN-AUTO-DOCS:START (CODE:src=../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si&syntax=c&lines=449-472) -->
 <!-- The below code snippet is automatically added from ../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si -->
 ```c
     uo.data_in_ready = 0;
@@ -194,13 +195,11 @@ $if MCH2022 then
 $end
 ```
 <!-- MARKDOWN-AUTO-DOCS:END -->
-The read byte and the bit indicating the memory controller is busy are given to the
-CPU through its `user_data` registry (32 bits), that the RISC-V code can use to wait for
-the read to complete and get the value:
-```c
-user_data[0,24] = { ..., txm.rdata, ... , txm.busy, ... };
-```
-(`txm.rdata` is 8 bits as the texture memory interface reads bytes.)
+
+This immediately initiates a transfer. During a transfer the CPU is stalled: its
+RAM is being written every cycle and it can no longer fetch instruction.
+<!-- MARKDOWN-AUTO-DOCS:START (CODE:src=../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si&syntax=c&lines=380-381) -->
+<!-- MARKDOWN-AUTO-DOCS:END -->
 
 ### GPU, command queue and screen
 
