@@ -17,7 +17,6 @@ wget $OPT $SILICE_URL/projects/common/simulation_spram.si
 wget $OPT $SILICE_URL/projects/common/clean_reset.si
 wget $OPT $SILICE_URL/projects/common/ice40_half_quarter_clock.v
 wget $OPT $SILICE_URL/projects/common/ice40_half_clock.v
-wget $OPT $SILICE_URL/projects/common/ice40_half_clock.v
 wget $OPT $SILICE_URL/projects/common/divint_std.si
 wget $OPT $SILICE_URL/projects/common/uart.si
 wget $OPT $SILICE_URL/projects/common/verilator_data.v
