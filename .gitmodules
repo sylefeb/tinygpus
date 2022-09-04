@@ -1,0 +1,3 @@
+[submodule "demos/q5k/qrepack/LibSL-small"]
+	path = demos/q5k/qrepack/LibSL-small
+	url = https://github.com/sylefeb/LibSL-small.git

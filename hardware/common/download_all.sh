@@ -6,6 +6,7 @@ wget $OPT $SILICE_URL/projects/common/plls/icebrkr_25.v
 wget $OPT $SILICE_URL/projects/common/plls/icebrkr_50.v
 wget $OPT $SILICE_URL/projects/common/plls/icebrkr_60.v
 wget $OPT $SILICE_URL/projects/common/plls/icebrkr_66.v
+wget $OPT $SILICE_URL/projects/common/plls/icebrkr_70.v
 wget $OPT $SILICE_URL/projects/common/plls/icebrkr_100.v
 wget $OPT $SILICE_URL/projects/common/ice40_sb_io.v
 wget $OPT $SILICE_URL/projects/common/ice40_sb_io_ddr.v
@@ -15,7 +16,6 @@ wget $OPT $SILICE_URL/projects/common/ice40_spram.v
 wget $OPT $SILICE_URL/projects/common/simulation_spram.si
 wget $OPT $SILICE_URL/projects/common/clean_reset.si
 wget $OPT $SILICE_URL/projects/common/ice40_half_quarter_clock.v
-wget $OPT $SILICE_URL/projects/common/ice40_half_clock.v
 wget $OPT $SILICE_URL/projects/common/ice40_half_clock.v
 wget $OPT $SILICE_URL/projects/common/divint_std.si
 wget $OPT $SILICE_URL/projects/common/uart.si

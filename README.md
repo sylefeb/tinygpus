@@ -1,10 +1,10 @@
-# TinyGPUs
-*Making graphics hardware like its 1990, explained*
+# TinyGPUs: the DMC-1
+*Making graphics hardware like its 1990, explained. Renders Doom, Comanche and Quake levels!*
 
-> **This is work in progress**. You're coming too soon, but feel free to peek around!
+> **This is work in progress**. Please stay tuned if you'd like to known when additional explanations come in. Comments welcome!
 
 Quick links:
-- [TinyGPUs](#tinygpus)
+- [TinyGPUs: the DMC-1](#tinygpus-the-dmc-1)
   - [Running the demos](#running-the-demos)
     - [In simulation](#in-simulation)
     - [On the MCH2022 badge](#on-the-mch2022-badge)
@@ -12,12 +12,15 @@ Quick links:
   - [The DMC-1 design](#the-dmc-1-design)
     - [Context](#context)
     - [On perspective correct texturing](#on-perspective-correct-texturing)
-    - [A key reference](#a-key-reference)
+      - [Z-constant rasterization](#z-constant-rasterization)
+      - [Precomputing the per-pixel division](#precomputing-the-per-pixel-division)
+      - [A key reference](#a-key-reference)
+    - [On lightmaps](#on-lightmaps)
     - [Design walkthrough](#design-walkthrough)
     - [Discussion](#discussion)
   - [Credits](#credits)
 
-The tinyGPUs project started with the following question: *"What would have resembled graphics hardware dedicated to our beloved retro-games from the early 90's, such as Doom 1993 and Comanche 1992?"*. This led me to creating the `DMC-1` GPU, the first (and currently only!) tinyGPU in this repository.
+The tinyGPUs project started with the following question: *"What would have resembled graphics hardware dedicated to our beloved retro-games from the early 90's, such as Doom 1993 and Comanche 1992?"*. This led me to creating the `DMC-1` GPU, the first (and currently only!) tiny GPU in this repository.
 
 > `DMC` stands for *Doom Meets Comanche*... also, it sounds cool (any resemblance to a car name is of course pure coincidence).
 
@@ -36,13 +39,15 @@ For building the DMC-1 demos Silice has to be installed and in the path, please 
 
 > **Note:** The build process automatically downloads files, including data files from external sources. See the download scripts [here](hardware/common/download_all.sh) and [here](demos/data/get_data.sh).
 
-There are three main demos: `terrain`, `tetrahedron` and `doomchip-onice`.
+There are several demos: `terrain`, `tetrahedron`, `doomchip-onice`, `interleaved`, `triangles` and `q5k` (quake viewer!).
 All can be simulated, and currently run on the [mch2022 badge](https://www.bodge.team/docs/badges/mch2022/) and the [icebreaker](https://1bitsquared.com/products/icebreaker) with a SPI screen plugged in the PMOD 1A connector (details below).
 
 <table align="center"><tr>
 <td><img src="docs/terrain.png"        width="160px"></td>
-<td><img src="docs/tetrahedron.png"    width="160px"></td>
 <td><img src="docs/doomchip-onice.png" width="160px"></td>
+<td><img src="docs/quake.jpg"      width="160px"></td>
+</tr><tr>
+<td><img src="docs/tetrahedron.png"    width="160px"></td>
 <td><img src="docs/interleaved.png"    width="160px"></td>
 <td><img src="docs/triangles.png"      width="160px"></td>
 </tr></table>
@@ -72,6 +77,12 @@ cd demos
 make simulation DEMO=doomchip-onice
 ```
 
+For the quake-up5k (q5k) demo:
+```
+cd demos
+make simulation DEMO=q5k
+```
+
 ___
 ### On the MCH2022 badge
 
@@ -85,6 +96,9 @@ make BOARD=mch2022 DEMO=doomchip-onice program_all MCH2022_PORT=/dev/ttyACM1
 The `program_all` target takes time as it uploads the texture pack. Once done,
 use `program_code` to only upload the compiled code and `program_design` for the
 design only (as long as there is power to the badge).
+
+> When switching between the q5k (Quake) and other demos, use `make clean` to
+> ensure the correct palette is used next.
 
 ___
 ### On the icebreaker
@@ -140,6 +154,8 @@ The `DMC-1` is my take on this. Thinking beyond Doom, I thought I should also su
 - Adding a terrain to Doom sounds like a huge thing.
 - If I was to create a GPU for Doom, it better should come with a killer feature.
 
+> And while I was at it, I later added support for Quake level rendering!
+
 In terms of resources, I decided to primarily target the Lattice ice40 UP5K. First, this is the platform used by [the incredible source port on custom SOC by Sylvain Munaut](https://www.youtube.com/watch?v=3ZBAZ5QoCAk). Targeting anything bigger would have seemed too easy. Second, the UP5K is fairly slow (validating timing at 25 MHz is good, anything above is *very* good), and has 'only' 5K LUTs (that's not so small though, [1K LUTs can run a full 32 bits RISCV dual-core processor!](https://github.com/sylefeb/Silice/blob/master/projects/ice-v/IceVDual.md)). So this makes for a good challenge. On the upside, the UP5K has 8 DSPs (great for fast multipliers!) and 128KB of SPRAM, a fast one-cycle read/write memory. So this gives hope something can actually be achieved. Plus, a SPIflash memory is typically hooked alongside FPGAs for its configuration. A SPIflash is to be considered read only for our purpose (because writing is very, very slow), but even though reading takes multiple cycles to initialize a random access, performance is far from terrible. And that's  great, because SPIflash memories are typically a few MB and we need to put our large textures somewhere!
 
 At this point, you might want to watch [my video on the Doomchip on-ice](https://youtu.be/2ZAIIDXoBis), [browse the slides here](https://www.antexel.com/doomchip_onice_rc3/) or read the [detailed design walkthrough](docs/DMC-1-walkthrough.md). This explains how the initial design of the `DMC-1` was achieved, including perspective correct texturing for walls and flats (floors and ceilings) as well as the terrain rendering.
@@ -164,11 +180,15 @@ This is more general because clearly the perspective is not 'axis aligned' with 
 
 > I call *free texture mapping* the general case where u,v coordinates would be assigned to the triangle vertices and used to interpolate texture coordinates across the triangle surface. This interpolation also requires the per-pixel division, but I don't have a clever trick to escape this one!!
 
+#### Z-constant rasterization
+
 One possible approach to deal with this case is the so called *z-constant raterization*. This is not a very common technique and, afaik, there are not many descriptions or implementations of it. I found a description in this article: [Free Direction Texture Mapping](http://qzx.com/pc-gpe/fdtm.txt) by Hannu Helminen. It is part of a highly enjoyable treasure trove, an archive of the *PC Game Programmer's Encyclopedia*.
 
-> As I browsed the PCGPE archive (highly recommended) I found [a great article on texturing](http://qzx.com/pc-gpe/texture.txt) by Sean Barrett. This article from 1994, which covers many aspects of texturing, introduces an approach for planar texturing mapping. What I describe below is equivalent, and it turns out his approach has been used in many games around the Quake era! [I come back to it later](#a-key-reference).
+> As I browsed the PCGPE archive (highly recommended) I found [a great article on texturing](http://qzx.com/pc-gpe/texture.txt) by Sean Barrett. This article from 1994, which covers many aspects of texturing, introduces an approach for planar texturing mapping. What I describe next is equivalent, and it turns out his approach has been used in many games around the Quake era! [I come back to it later](#a-key-reference).
 
-Z-constant raterization sounds good but I was not too keen on implementing it. Then, I looked back at how I dealt with flats in the *Doomchip onice*. You see, because I am drawing *only* vertical span, producing the screen column after column, I could not do horizontal spans like the original engine. Thus I had to deal with the perspective effect during texturing, and avoid the per-pixel division. Well, I did not *avoid it*, because it is required, but instead I *precomputed* it. Here is a figure detailing the idea (my talk features an [animated version](https://youtu.be/2ZAIIDXoBis?t=1313)):
+#### Precomputing the per-pixel division
+
+Z-constant raterization sounds good but I was not too keen on implementing it. Then, I looked back at how I dealt with flats in the *Doomchip onice*. You see, because I am drawing *only* vertical span, producing the screen column after column without a framebuffer, I simply cannot draw horizontal spans like the original engine. Thus I had to deal with the perspective effect during texturing, and avoid the per-pixel division. Well, I did not *avoid it*, because it is required, but instead I *precomputed* it. Here is a figure detailing the idea (my talk features an [animated version](https://youtu.be/2ZAIIDXoBis?t=1313)):
 
 <center><img src="docs/fig_inv_y.png" width="600px"></center>
 
@@ -210,9 +230,9 @@ And that's about it for the main trick enabling perspective correct *planar* tex
 ```
 Planar spans are only used for horizontal floors/ceilings in this demo, since walls use simpler vertical spans. Because the surfaces are horizontal, the parameters to `PARAMETER_PLANE_A` are `256,0,0`: only the normal varies with the $y$ axis.
 
-A more general use can be seen in the [tetrahedron demo](demos/tetrahedron/tetrahedron.c). In this demo the triangles are rasterized into spans on the CPU ; this can be seen in the file [raster.c](software/api/raster.c) that contains detailed comments on that process too.
+A more general use can be seen in the [tetrahedron demo](demos/tetrahedron/tetrahedron.c). In this demo the triangles are rasterized into spans on the CPU ; this can be seen in the file [raster.c](software/api/raster.c) that contains detailed comments on that process too. And of course, that is also the case in the [Quake viewer demo](demos/q5k/q5k.c).
 
-### A key reference
+#### A key reference
 
 In [this 1994 article](http://qzx.com/pc-gpe/texture.txt), Sean Barrett introduces the idea of using planar texture mapping, with a technique using 9 'magic numbers'. Interestingly, these numbers are used to compute three values $a$, $b$, $c$ and finally the texture coordinates are obtained as $u = a / c$ and $v = b / c$. It turns out this computes a ray-plane intersection, and $c$ is the dot product between the plane normal and view ray direction! This can be guessed in the article from the expression of Oc,Hc,Vc that is the cross product of M and N, two vectors defining the texture plane, and hence the texture plane normal. But we don't have to guess, because Sean Barrett wrote [another article detailing this idea](https://nothings.org/gamedev/ray_plane.html)!
 
@@ -220,9 +240,26 @@ The only difference is that I store the precomputed dot product into a table, to
 
 > Huge thanks to Sean Barrett for [discussions on z-constant and planar texture mapping](https://twitter.com/sylefeb/status/1565425789063020545). Make sure to read his [1994 PCGPE article](http://qzx.com/pc-gpe/texture.txt) that discusses many important aspects of texturing.
 
+### On lightmaps
+
+A big challenge in the `q5k` demo was to support lightmaps: textures which contain light information blended with the standard color textures.
+
+The lightmaps of every polygon in the level are packed into standard textures (this is done by the [qrepack](demos/q5k/qrepack/qrepack.cc) tool). However the key question was how to blend the lightmaps with the color textures?
+
+<center>
+<img src="docs/textures.jpg" width="200px"/> <font size=20px>+</font>
+<img src="docs/lmaps.jpg" width="200px"/> <font size=20px>=</font>
+<img src="docs/both.jpg" width="200px"/>
+</center>
+
+Fortunately, the per-column buffers of the DMC-1 (see `colbufs` in [the design](hardware/GPUs/dmc-1/dmc-1.si)) store 16 bits per pixel: 8 bits for a color byte (index in the palette), and an 8-bits light level. That is because I do not use the Doom/Quake palette trick for lighting, but instead dim the actual RGB values after palette lookup, before sending data to the screen.
+
+So to blend the lightmaps in, all that is needed is to write the light information in a second pass, sending each rasterized column span twice: first for color textures, second for lightmaps. The depth test is set to allow writes when depth is equal, so that only the
+surfaces that are exactly overlapping the visible ones go through.
+
 ### Design walkthrough
 
-I prepared a walkthrough of the [Silice](https://github.com/sylefeb/Silice) design in [this separate page](./docs/DMC-1-walkthrough.md).
+I started a walkthrough of the [Silice](https://github.com/sylefeb/Silice) design in [this separate page](./docs/DMC-1-walkthrough.md).
 
 ### Discussion
 
@@ -237,3 +274,5 @@ ___
 contains excellent explanations regarding the Comanche terrain rendering algorithm.
 - Doom shareware data, `doom1.wad`, is automatically downloaded and is of course
 part of the original game by Id Software.
+- Quake *e1m1.bsp* used in the q5k demo is downloaded from [this repository](https://github.com/fzwoch/quake_map_source) and uses free textures from the ["Quake
+Revitalization Project"](http://qrp.quakeone.com/).

@@ -217,7 +217,11 @@ static inline int rconvex_init(
       max_x     = x;
     }
   }
-  if (max_x < 0 || min_x > SCREEN_WIDTH) return 0;
+  if (max_x < 0 || min_x > SCREEN_WIDTH) {
+    t->x = -1;
+    t->last_x = -2;
+    return 0;
+  }
   t->x      = min_x;
   if (t->x < 0) { t->x = 0; } // redge_init properly deals with this too
   t->last_x = max_x;
@@ -285,6 +289,7 @@ static inline int rconvex_step(
 // for a texturing plane
 
 typedef struct {
+  short nx,ny,nz;
   short ux,uy,uz;
   short vx,vy,vz;
 } surface;
@@ -297,7 +302,7 @@ typedef struct {
 
 typedef struct {
   int   u_offs,v_offs;
-  short ded;
+  int   ded;
 } rconvex_texturing;
 
 typedef int          int32_t;
@@ -377,6 +382,7 @@ static inline void surface_pre(surface *s,int p0,int p1,int p2,const p3d *pts)
   p3d n;
   normal_from_three_points(pts + p0, pts + p1, pts + p2, &n);
   // compute u,v from n
+  s->nx = n.x; s->ny = n.y; s->nz = n.z;
   cross(n.x,n.y,n.z, 256,0,0,           &s->ux,&s->uy,&s->uz);
   normalize(&s->ux,&s->uy,&s->uz);
   cross(n.x,n.y,n.z, s->ux,s->uy,s->uz, &s->vx,&s->vy,&s->vz);
@@ -392,18 +398,17 @@ typedef void (*f_transform)(short *x, short *y, short *z, short w);
 static inline void surface_transform(const surface *s,trsf_surface *ts,
                                      f_transform trsf)
 {
+  ts->nx = s->nx; ts->ny = s->ny; ts->nz = s->nz;
   ts->ux = s->ux; ts->uy = s->uy; ts->uz = s->uz;
   ts->vx = s->vx; ts->vy = s->vy; ts->vz = s->vz;
   // transform plane vectors
+  trsf(&ts->nx,&ts->ny,&ts->nz,0);
   trsf(&ts->ux,&ts->uy,&ts->uz,0);
   trsf(&ts->vx,&ts->vy,&ts->vz,0);
-  // compute normal
-  cross(ts->vx, ts->vy, ts->vz, ts->ux, ts->uy, ts->uz, &ts->nx, &ts->ny, &ts->nz);
 }
 
 // ____________________________________________________________________________
 // Prepares texturing info for a rconvex
-
 static inline void rconvex_texturing_pre(
                                      const trsf_surface *ts, f_transform trsf,
                                      const p3d *p0, rconvex_texturing *rtex)
@@ -424,6 +429,34 @@ static inline void rconvex_texturing_pre(
 }
 
 // ____________________________________________________________________________
+// Same as above taking different n,u,v vectors
+static inline void rconvex_texturing_pre_nuv(
+                                     const p3d *n,const p3d *u,const p3d *v,
+                                     int d_u,int d_v,
+                                     f_transform trsf,
+                                     const p3d *p_ref_uv,
+                                     const p3d *p_ref,
+                                     rconvex_texturing *rtex)
+{
+  p3d trp0 = *p_ref_uv; // transform reference point for uv texturing
+  trsf(&trp0.x,&trp0.y,&trp0.z,1);
+  // uv translation: translate so that p_ref_uv coordinates map on (0,0)
+  rtex->u_offs   = dot3( trp0.x,trp0.y,trp0.z, u->x,u->y,u->z );
+  rtex->v_offs   = dot3( trp0.x,trp0.y,trp0.z, v->x,v->y,v->z );
+  // plane distance
+  trp0 = *p_ref; // transform reference point for surface
+  trsf(&trp0.x, &trp0.y, &trp0.z, 1);
+  rtex->ded      = dot3( trp0.x,trp0.y,trp0.z, n->x,n->y,n->z ) >> 8;
+  // NOTE: ded < 0 ==> backface surface
+  if (rtex->ded > 0) {
+    rtex->u_offs = - rtex->u_offs;
+    rtex->v_offs = - rtex->v_offs;
+  }
+  rtex->u_offs += d_u << 8;
+  rtex->v_offs += d_v << 8;
+}
+
+// ____________________________________________________________________________
 // Binds the surface for rendering (sets UV parameters)
 static inline void rconvex_texturing_bind(const rconvex_texturing *rtex)
 {
@@ -437,7 +470,7 @@ static inline void rconvex_texturing_bind(const rconvex_texturing *rtex)
 
 // ____________________________________________________________________________
 // Setup surface parameters for the span (return the dr parameter)
-static inline int surface_setup_span(trsf_surface *s,int rx,int ry,int rz)
+static inline int surface_setup_span(const trsf_surface *s,int rx,int ry,int rz)
 {
   int dr = dot3( rx,ry,rz, s->nx,s->ny,s->nz )>>8;
   int du = dot3( rx,ry,rz, s->ux,s->uy,s->uz )>>8;
@@ -451,6 +484,22 @@ static inline int surface_setup_span(trsf_surface *s,int rx,int ry,int rz)
   return dr;
 }
 
+// ____________________________________________________________________________
+// Same as above with given n,u,v vectors
+static inline int surface_setup_span_nuv(const p3d *n,const p3d *u,const p3d *v,
+                                         int rx,int ry,int rz)
+{
+  int dr = dot3( rx,ry,rz, n->x,n->y,n->z )>>8;
+  int du = dot3( rx,ry,rz, u->x,u->y,u->z )>>8;
+  int dv = dot3( rx,ry,rz, v->x,v->y,v->z )>>8;
+#ifndef EMUL
+  col_send(
+    PARAMETER_PLANE_A(n->y,u->y,v->y),
+    PARAMETER_PLANE_A_EX(du,dv) | PARAMETER
+  );
+#endif
+  return dr;
+}
 
 // ____________________________________________________________________________
 // Polygon clipping ; if the polygon has z coordinates below the near z plane
@@ -478,6 +527,7 @@ void clip_polygon(int z_clip, const p3d *pts, int n_pts, p3d *_clipped,int *_n_c
       prev_to_p.z = p.z - prev_p.z;
       // interpolation ratio
 #if 1
+      // use pre-computed table
       int delta = (p.z - prev_p.z);
       int neg = 0;
       if (delta < 0) {

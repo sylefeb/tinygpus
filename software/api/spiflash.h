@@ -10,7 +10,7 @@ static inline void spiflash_init()
   while (spiflash_busy()) { /*nothing*/ }
 }
 
-static inline unsigned char *spiflash_copy(int addr,volatile unsigned char *dst,int len)
+static inline unsigned char *spiflash_copy(int addr,volatile int *dst,int len)
 {
   *SPIFLASH = (1<<31) | len;
   *SPIFLASH = (int)dst;
