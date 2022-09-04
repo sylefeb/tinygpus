@@ -90,15 +90,15 @@ Plugin the board and type:
 
 ```
 cd demos
-make BOARD=mch2022 DEMO=doomchip-onice program_all MCH2022_PORT=/dev/ttyACM1
+make BOARD=mch2022 DEMO=q5k program_all MCH2022_PORT=/dev/ttyACM1
 ```
 
-The `program_all` target takes time as it uploads the texture pack. Once done,
-use `program_code` to only upload the compiled code and `program_design` for the
-design only (as long as there is power to the badge).
+> The `program_all` target takes time as it uploads the texture pack. Once done,
+> use `program_code` to only upload the compiled code and `program_design` for the
+> design only (as long as there is power to the badge).
 
-> When switching between the q5k (Quake) and other demos, use `make clean` to
-> ensure the correct palette is used next.
+> When switching between the q5k (Quake) and other demos, use `make clean`
+> before building to ensure the correct palette is used next.
 
 ___
 ### On the icebreaker
@@ -128,9 +128,12 @@ cd demos
 make BOARD=icebreaker DEMO=terrain program_all
 ```
 
-> **Note:** `program_all` takes a long time as it transfers the texture data
+> `program_all` takes a long time as it transfers the texture data
 onto the board. After doing it once, to test other demos replace `program_all`
 by `program_code`.
+
+> When switching between the q5k (Quake) and other demos, use `make clean`
+> before building to ensure the correct palette is used next.
 
 ___
 ## The DMC-1 design
