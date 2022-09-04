@@ -12,6 +12,7 @@ Quick links:
   - [The DMC-1 design](#the-dmc-1-design)
     - [Context](#context)
     - [On perspective correct texturing](#on-perspective-correct-texturing)
+    - [A key reference](#a-key-reference)
     - [Design walkthrough](#design-walkthrough)
     - [Discussion](#discussion)
   - [Credits](#credits)
@@ -51,7 +52,7 @@ The demos are running both on the `icebreaker` board and the `MCH2022` badge.
 ___
 ### In simulation
 
-All demos can be run in simulation (verilator). Note that it takes a little bit of time before the rendering starts, as the full boot process (including loading code from SPIflash) is being simulating. During boot the screen remains black (on real hardware this delay is imperceptible).
+All demos run in simulation (verilator). Note that it takes a little bit of time before the rendering starts, as the full boot process (including loading code from SPIflash) is being simulating. During boot the screen remains black (on real hardware this delay is imperceptible).
 
 For the rotating tetrahedron demo:
 ```
@@ -149,7 +150,7 @@ You can also checkout the design walkthrough in [this separate page](./docs/DMC-
 
 An interesting capability of the DMC-1 is that it can achieve perspective correct texturing on arbitrary slanted surfaces, such as in the tetrahedron demo.
 
-The reason this is interesting is because most games of the era(1) where limiting perspective correct texturing to special cases. Consider this screenshot of E1M1:
+The reason this is interesting is because most games of the era where limiting perspective correct texturing to special cases (with good reasons: performance!). Consider this screenshot of E1M1:
 
 <center><img src="docs/doomchip-onice.png" width="400px"/></center>
 
@@ -163,9 +164,11 @@ This is more general because clearly the perspective is not 'axis aligned' with 
 
 > I call *free texture mapping* the general case where u,v coordinates would be assigned to the triangle vertices and used to interpolate texture coordinates across the triangle surface. This interpolation also requires the per-pixel division, but I don't have a clever trick to escape this one!!
 
-One possible approach to deal with this case is the so called z-constant raterization. This is not a very common technique and, afaik, there are not many descriptions or implementations of it. I found a description in this highly enjoyable treasure trove: an archive of the *PC Game Programmer's Encyclopedia*: [Free Direction Texture Mapping](http://qzx.com/pc-gpe/fdtm.txt) by Hannu Helminen (alongside [another great article on texturing](http://qzx.com/pc-gpe/texture.txt) by Sean Barrett).
+One possible approach to deal with this case is the so called *z-constant raterization*. This is not a very common technique and, afaik, there are not many descriptions or implementations of it. I found a description in this article: [Free Direction Texture Mapping](http://qzx.com/pc-gpe/fdtm.txt) by Hannu Helminen. It is part of a highly enjoyable treasure trove, an archive of the *PC Game Programmer's Encyclopedia*.
 
-This sounds good but I was not too keen on implementing it. Then, I looked back at how I dealt with flats in the *Doomchip onice*. You see, because I am drawing *only* vertical span, producing the screen column after column, I could not do horizontal spans like the original engine. Thus I had to deal with the perspective effect during texturing, and avoid the per-pixel division. Well, I did not *avoid it*, because it is required, but instead I *precomputed* it. Here is a figure detailing the idea (my talk features an [animated version](https://youtu.be/2ZAIIDXoBis?t=1313)):
+> As I browsed the PCGPE archive (highly recommended) I found [a great article on texturing](http://qzx.com/pc-gpe/texture.txt) by Sean Barrett. This article from 1994, which covers many aspects of texturing, introduces an approach for planar texturing mapping. What I describe below is equivalent, and it turns out his approach has been used in many games around the Quake era! [I come back to it later](#a-key-reference).
+
+Z-constant raterization sounds good but I was not too keen on implementing it. Then, I looked back at how I dealt with flats in the *Doomchip onice*. You see, because I am drawing *only* vertical span, producing the screen column after column, I could not do horizontal spans like the original engine. Thus I had to deal with the perspective effect during texturing, and avoid the per-pixel division. Well, I did not *avoid it*, because it is required, but instead I *precomputed* it. Here is a figure detailing the idea (my talk features an [animated version](https://youtu.be/2ZAIIDXoBis?t=1313)):
 
 <center><img src="docs/fig_inv_y.png" width="600px"></center>
 
@@ -177,11 +180,13 @@ Thanks to the limited range of values (screen height), this fits in a small tabl
 
 > To be precise, given a value $n$ that goes from $1$ to $N$, we precompute a table $T$ of $N$ entries. Choose a large value $M$, typically if the table stores $b$ bits integers pick $M = 2^b$. Then precompute all $T[n] = \frac{M}{n}$ (clamp to $M-1$ when $n = 1$). For this trick to be reasonable we need $N$ to be bounded and not too large, which was the case here ($N$ being half the screen height). You can see how the table used by the GPU is generated by the pre-processor [here](https://github.com/sylefeb/tinygpus/blob/main/hardware/GPUs/dmc-1/dmc-1.si#L192-L199).
 
-> Quick note on how to  use the precomputed division table. Let us assume we want to compute $\frac{x}{n}$, instead we will compute `(x . T[n]) >> b`, where the division by M is replaced by a shift of $b$ bits to the right (or less if we want to keep a fixed point result). Take care that the product $x . T[n]$ does not overflow.
+> Quick note on how to  use the precomputed division table. Let us assume we want to compute $\frac{x}{n}$, instead we will compute `(x . T[n]) >> b`, where the division by M is replaced by a multiplication and a shift of $b$ bits to the right (or less if we want to keep a fixed point result). Take care that the product $x . T[n]$ does not overflow.
 
-How is this relevant to planar perspective correct texturing? Well, the question is how to generalize this principle and, more importantly, whether the required division would also be limited in range so it could be pre-computed in a small-size table.
+How is this relevant to planar perspective correct texturing? Well, the question is how to generalize this principle and, more importantly for us, whether the required division would also be limited in range so it could be pre-computed in a small-size table.
 
 It turns out that the answer is yes! To understand why, we have to take a different point of view, and see this as a [raytracing](https://en.wikipedia.org/wiki/Ray_tracing_(graphics)) question: Given a view ray, how do we compute the *u,v* texture coordinate when hitting a plane? There are good explanations [on this page](https://www.scratchapixel.com/lessons/3d-basic-rendering/minimal-ray-tracer-rendering-simple-shapes/ray-plane-and-ray-disk-intersection), so I won't repeat these in details here. The important point, however, is that computing these coordinates involves only dividing by the dot product of the plane normal and view ray direction (see the expression of `t` in the aforementioned page). That is good new because both vectors are *unit vectors*, so their dot product is necessarily in $[-1,1]$, giving us a limited range indeed. We can stay within $[0,1]$ by only considering front facing planes, then remap the range to $[1,N]$ and precompute divisions of a base value $M$ by this range. This is not very precise around 0, but that is when the plane is almost aligned with the view ray ('flat horizon') so we can't see much anyway.
+
+> Note that the 'unit vectors' will in practice be encoded in integers using fixed point arithmetic. For these unit vectors I typically use 8 bits fractions, so that 256 represents one.
 
 And that's about it for the main trick enabling perspective correct *planar* texturing. In the API these are the `COLDRAW_PLANE_B` span types, which require first some setup, using `PARAMETER_PLANE_A` (specifying the normal, u and v axis coordinate along the screen y axis). An example of using the planar spans can be seen in the [Doomchip on-ice](demos/doomchip-onice/doomchip-onice.c) (simplified here for readability):
 
@@ -206,6 +211,14 @@ And that's about it for the main trick enabling perspective correct *planar* tex
 Planar spans are only used for horizontal floors/ceilings in this demo, since walls use simpler vertical spans. Because the surfaces are horizontal, the parameters to `PARAMETER_PLANE_A` are `256,0,0`: only the normal varies with the $y$ axis.
 
 A more general use can be seen in the [tetrahedron demo](demos/tetrahedron/tetrahedron.c). In this demo the triangles are rasterized into spans on the CPU ; this can be seen in the file [raster.c](software/api/raster.c) that contains detailed comments on that process too.
+
+### A key reference
+
+In [this 1994 article](http://qzx.com/pc-gpe/texture.txt), Sean Barrett introduces the idea of using planar texture mapping, with a technique using 9 'magic numbers'. Interestingly, these numbers are used to compute three values $a$, $b$, $c$ and finally the texture coordinates are obtained as $u = a / c$ and $v = b / c$. It turns out this computes a ray-plane intersection, and $c$ is the dot product between the plane normal and view ray direction! This can be guessed in the article from the expression of Oc,Hc,Vc that is the cross product of M and N, two vectors defining the texture plane, and hence the texture plane normal. But we don't have to guess, because Sean Barrett wrote [another article detailing this idea](https://nothings.org/gamedev/ray_plane.html)!
+
+The only difference is that I store the precomputed dot product into a table, to avoid the per-pixel division (and that we can now implement this in hardware on an FPGA!).
+
+> Huge thanks to Sean Barrett for [discussions on z-constant and planar texture mapping](https://twitter.com/sylefeb/status/1565425789063020545). Make sure to read his [1994 PCGPE article](http://qzx.com/pc-gpe/texture.txt) that discusses many important aspects of texturing.
 
 ### Design walkthrough
 
