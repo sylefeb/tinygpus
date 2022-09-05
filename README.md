@@ -140,15 +140,15 @@ ___
 
 ### Context
 
-I started the `DMC-1` after my initial `doomchip` experiments. The [original doomchip](https://twitter.com/sylefeb/status/1258808333265514497), which is [available in the Silice repository](https://github.com/sylefeb/Silice/tree/master/projects/doomchip) was pushing the idea of running the Doom render loop *without any CPU*. This means that the entire rendering algorithm was turned into specialized logic -- a Doom dedicated chip that could not do anything else but render E1M1 ... so much fun!
+I started the `DMC-1` after my initial `doomchip` experiments. The [original doomchip](https://twitter.com/sylefeb/status/1258808333265514497), which is [available in the Silice repository](https://github.com/sylefeb/Silice/tree/master/projects/doomchip) was pushing the idea of running the Doom render loop *without any CPU*. This means that the entire rendering algorithm was turned into specialized logic -- a Doom dedicated chip that could not do anything else but render E1M1 ... !
 
 I went on to design several versions, including one using SDRAM to store level and textures. This was a fun experiment, but of course the resulting design is very large because every part of the algorithm becomes a piece of a complex dedicated circuit. That might be desirable under specific circumstances, but is otherwise highly unusual. You see, normally one seeks to produce compact hardware designs, minimizing the resource usage, and in particular the number of logic gates (or their LUTs equivalent in FPGAs).
 
-When you have (relatively) large FPGAs like the `de10-nano` or `ULX3S 85F` I was using, this is not a top concern, because the design still fits easily. But there's a lot to be said about trying to be parsimonious and make the best of the resources you have. I come from an age where computers where not powerful beyond imagination as they are today, and where optimizing was not only done for fun, it was *essential*. And when I say optimizing, I mean it in all possible ways: better algorithms (lower complexity), clever tricks, and informed low level CPU optimizations, usually directly in assembly code. Of course we could not go past the hardware. But now we can! Because thanks to FPGAs and the emergence of open source toolchains we are empowered with designing and quickly testing our own hardware!
+When targetting boards with (relatively) large FPGAs like the `de10-nano` or `ULX3S 85F` I was using, this is not a top concern, because the design still fits easily. But there's a lot to be said about trying to be parsimonious and make the best of the resources you have. I come from an age where computers where not powerful beyond imagination as they are today, and where optimizing was not only done for fun, it was *essential*. And when I say optimizing, I mean it in all possible ways: better algorithms (lower complexity), clever tricks, and informed low level CPU optimizations, usually directly in assembly code. Of course we could not go past the hardware. But now we can! Because thanks to FPGAs and the emergence of open source toolchains we are empowered with designing and quickly testing our own hardware!
 
-This got me wondering. The `doomchip` is one extreme point of putting everything in hardware and redoing the entire render loop *from scratch*. The other extreme point -- also very interesting -- is to take [Doom source code](https://github.com/id-Software/DOOM) and run it on a custom SOC. There, the skills are all on [designing a very efficient hardware SOC](https://www.youtube.com/watch?v=3ZBAZ5QoCAk) with a good CPU and well thought out memory layout and cache. There are in betweens, with source ports requiring [careful engine optimizations](https://kilograham.github.io/rp2040-doom/).
+This got me wondering. The `doomchip` is one extreme point of putting everything in hardware and redoing the entire render loop *from scratch*. The other extreme point -- also very interesting -- is to take the [Doom source code](https://github.com/id-Software/DOOM) and run it on a custom *SOC* ('system on a chip', the CPU, RAM and other pieces of hardware around). There, the skills are all on [designing a very efficient hardware SOC](https://www.youtube.com/watch?v=3ZBAZ5QoCAk) with a good CPU and well thought out memory layout and cache. Some source ports require [in depth, careful engine optimizations](https://kilograham.github.io/rp2040-doom/) to fit the target hardware.
 
-> There are so many excellent ports, I am just citing a few for context here.
+> There are so many excellent ports, I am just linking to a few for context here.
 
 So the questions I asked myself were, *Could we design a GPU for Doom and other games of this era? What would its architecture be like? Could it fit on a small FPGA?*
 
@@ -161,9 +161,9 @@ The `DMC-1` is my take on this. Thinking beyond Doom, I thought I should also su
 
 In terms of resources, I decided to primarily target the Lattice ice40 UP5K. First, this is the platform used by [the incredible source port on custom SOC by Sylvain Munaut](https://www.youtube.com/watch?v=3ZBAZ5QoCAk). Targeting anything bigger would have seemed too easy. Second, the UP5K is fairly slow (validating timing at 25 MHz is good, anything above is *very* good), and has 'only' 5K LUTs (that's not so small though, [1K LUTs can run a full 32 bits RISCV dual-core processor!](https://github.com/sylefeb/Silice/blob/master/projects/ice-v/IceVDual.md)). So this makes for a good challenge. On the upside, the UP5K has 8 DSPs (great for fast multipliers!) and 128KB of SPRAM, a fast one-cycle read/write memory. So this gives hope something can actually be achieved. Plus, a SPIflash memory is typically hooked alongside FPGAs for its configuration. A SPIflash is to be considered read only for our purpose (because writing is very, very slow), but even though reading takes multiple cycles to initialize a random access, performance is far from terrible. And that's  great, because SPIflash memories are typically a few MB and we need to put our large textures somewhere!
 
-At this point, you might want to watch [my video on the Doomchip on-ice](https://youtu.be/2ZAIIDXoBis), [browse the slides here](https://www.antexel.com/doomchip_onice_rc3/) or read the [detailed design walkthrough](docs/DMC-1-walkthrough.md). This explains how the initial design of the `DMC-1` was achieved, including perspective correct texturing for walls and flats (floors and ceilings) as well as the terrain rendering.
+At this point, you might want to watch [my video on the Doomchip on-ice](https://youtu.be/2ZAIIDXoBis) or [browse the slides here](https://www.antexel.com/doomchip_onice_rc3/). This explains how the initial design of the `DMC-1` was achieved, including perspective correct texturing for walls and flats (floors and ceilings) as well as the terrain rendering.
 
-You can also checkout the design walkthrough in [this separate page](./docs/DMC-1-walkthrough.md).
+I later added support for perspective correct texturing of polygons under any orientation (not just walls and flats), which is what I explain next.
 
 ### On perspective correct texturing
 
@@ -179,13 +179,13 @@ This per-pixel division is a big deal, because divisions are either slow (many c
 
 <center><img src="docs/tetrahedron.png" width="400px"></center>
 
-This is more general because clearly the perspective is not 'axis aligned' with respect to the screen. This is neither vertical nor horizontal. Yet, this is not *free texture mapping* either: the texture is painted onto the plane of the triangle, and when seen front-facing it will show up without distortion. I refer to this case as *planar texturing*.
+This is more general because clearly the perspective is not 'axis aligned' with respect to the screen. This is neither vertical nor horizontal. Yet, this is not *free texture mapping* either: the texture is painted onto the plane of the triangle, and when seen front-facing it will show up without distortion. I'll refer to this case as *planar texturing*.
 
-> I call *free texture mapping* the general case where u,v coordinates would be assigned to the triangle vertices and used to interpolate texture coordinates across the triangle surface. This interpolation also requires the per-pixel division, but I don't have a clever trick to escape this one!!
+> I call *free texture mapping* the general case where u,v coordinates would be assigned to the triangle vertices and used to interpolate texture coordinates across the triangle surface. This interpolation also requires the per-pixel division, but I don't know a clever trick to escape this one!!
 
 #### Z-constant rasterization
 
-One possible approach to deal with this case is the so called *z-constant raterization*. This is not a very common technique and, afaik, there are not many descriptions or implementations of it. I found a description in this article: [Free Direction Texture Mapping](http://qzx.com/pc-gpe/fdtm.txt) by Hannu Helminen. It is part of a highly enjoyable treasure trove, an archive of the *PC Game Programmer's Encyclopedia*.
+One possible approach to deal with the case of arbitrary angled polygons is the so called *z-constant raterization*. This is not a very common technique and, afaik, there are not many descriptions or implementations of it. I found a description in this article: [Free Direction Texture Mapping](http://qzx.com/pc-gpe/fdtm.txt) by Hannu Helminen. It is part of a highly enjoyable treasure trove, an archive of the *PC Game Programmer's Encyclopedia*.
 
 > As I browsed the PCGPE archive (highly recommended) I found [a great article on texturing](http://qzx.com/pc-gpe/texture.txt) by Sean Barrett. This article from 1994, which covers many aspects of texturing, introduces an approach for planar texturing mapping. What I describe next is equivalent, and it turns out his approach has been used in many games around the Quake era! [I come back to it later](#a-key-reference).
 
@@ -195,7 +195,7 @@ Z-constant raterization sounds good but I was not too keen on implementing it. T
 
 <center><img src="docs/fig_inv_y.png" width="600px"></center>
 
-On the left the screen view (each cell of the grid is a pixel). The blue column is being drawn as a piece of floor. On the right, the side view with the player eye to the left and the view ray through a pixel as a blue line. We get the *u* coordinate from the column *x* position on screen but need to compute the *v* coordinate, that is also the distance to the viewer, *z*. This is the one that requires a division, in this particular case by *y_screen*. The good news is that because *y_screen* is limited to the screen height, this can be pre-computed in a table. That is at the root of a good old [demoscene effect](https://github.com/sylefeb/Silice/blob/master/projects/vga_demo/vga_flyover3d.si):
+On the left the screen view (each cell of the grid is a pixel). The blue column is being drawn as a piece of floor. On the right, the side view with the player eye to the left and the view ray through a pixel as a blue line. We know the pixel position on screen but need to compute the *v* coordinate, that is also the distance to the viewer, *z*. This is the one that requires a division, in this particular case by *y_screen*. The good news is that because *y_screen* is limited to the screen height, this can be pre-computed in a table. That is at the root of a good old [demoscene effect](https://github.com/sylefeb/Silice/blob/master/projects/vga_demo/vga_flyover3d.si):
 
 <center><img src="https://github.com/sylefeb/Silice/raw/master/projects/vga_demo/vga_demo_flyover3d.png" width="300px"></center>
 
@@ -207,7 +207,7 @@ Thanks to the limited range of values (screen height), this fits in a small tabl
 
 How is this relevant to planar perspective correct texturing? Well, the question is how to generalize this principle and, more importantly for us, whether the required division would also be limited in range so it could be pre-computed in a small-size table.
 
-It turns out that the answer is yes! To understand why, we have to take a different point of view, and see this as a [raytracing](https://en.wikipedia.org/wiki/Ray_tracing_(graphics)) question: Given a view ray, how do we compute the *u,v* texture coordinate when hitting a plane? There are good explanations [on this page](https://www.scratchapixel.com/lessons/3d-basic-rendering/minimal-ray-tracer-rendering-simple-shapes/ray-plane-and-ray-disk-intersection), so I won't repeat these in details here. The important point, however, is that computing these coordinates involves only dividing by the dot product of the plane normal and view ray direction (see the expression of `t` in the aforementioned page). That is good new because both vectors are *unit vectors*, so their dot product is necessarily in $[-1,1]$, giving us a limited range indeed. We can stay within $[0,1]$ by only considering front facing planes, then remap the range to $[1,N]$ and precompute divisions of a base value $M$ by this range. This is not very precise around 0, but that is when the plane is almost aligned with the view ray ('flat horizon') so we can't see much anyway.
+It turns out that the answer is yes! To understand why, we have to take a different point of view, and see this as a [raytracing](https://en.wikipedia.org/wiki/Ray_tracing_(graphics)) question: Given a view ray, how do we compute the *u,v* texture coordinate when hitting a plane? There are good explanations [on this page](https://www.scratchapixel.com/lessons/3d-basic-rendering/minimal-ray-tracer-rendering-simple-shapes/ray-plane-and-ray-disk-intersection), so I won't repeat these in details here. The important point, however, is that computing these coordinates involves only dividing by the dot product of the plane normal and view ray direction (see the expression of `t` in the aforementioned page). That is good news because both vectors are *unit vectors*, so their dot product is necessarily in $[-1,1]$, giving us a limited range indeed. We can stay within $[0,1]$ by only considering front facing planes, then remap the range to $[1,N]$ and precompute divisions of a base value $M$ by this range. This is not very precise around 0, but that is when the plane is almost aligned with the view ray ('flat horizon') so we can't see much anyway.
 
 > Note that the 'unit vectors' will in practice be encoded in integers using fixed point arithmetic. For these unit vectors I typically use 8 bits fractions, so that 256 represents one.
 
@@ -217,8 +217,8 @@ And that's about it for the main trick enabling perspective correct *planar* tex
     // setup per-column
     int rz = 4096;
     int cx = col_to_x[c];
-    int du = dot3( cx,0,rz,  cosview,0,sinview ) >> 14;
-    int dv = dot3( cx,0,rz, -sinview,0,cosview ) >> 14;
+    int du = dot3( cx,b,rz,  cosview,0,sinview ) >> 14;
+    int dv = dot3( cx,b,rz, -sinview,0,cosview ) >> 14;
     col_send(
       PARAMETER_PLANE_A(256,0,0), // ny,uy,vy
       PARAMETER_PLANE_A_EX(du,dv) | PARAMETER
@@ -231,23 +231,23 @@ And that's about it for the main trick enabling perspective correct *planar* tex
     );
 
 ```
-Planar spans are only used for horizontal floors/ceilings in this demo, since walls use simpler vertical spans. Because the surfaces are horizontal, the parameters to `PARAMETER_PLANE_A` are `256,0,0`: only the normal varies with the $y$ axis.
+Planar spans are only used for horizontal floors/ceilings in this demo, since walls use simpler vertical spans. Because the surfaces are horizontal, the parameters to `PARAMETER_PLANE_A` are `256,0,0`: only the normal has a non zero coordinate along the screen y axis. Note how `du` represents the dot product between a view front vector `(cosview,0,sinview)` and the view ray `(cx,b,rz)` (computed from screen pixel coordinates). `dv` is similar for the orthogonal vector. These two values `du,dv` define the orientation of the texture within the plane.
 
 A more general use can be seen in the [tetrahedron demo](demos/tetrahedron/tetrahedron.c). In this demo the triangles are rasterized into spans on the CPU ; this can be seen in the file [raster.c](software/api/raster.c) that contains detailed comments on that process too. And of course, that is also the case in the [Quake viewer demo](demos/q5k/q5k.c).
 
 #### A key reference
 
-In [this 1994 article](http://qzx.com/pc-gpe/texture.txt), Sean Barrett introduces the idea of using planar texture mapping, with a technique using 9 'magic numbers'. Interestingly, these numbers are used to compute three values $a$, $b$, $c$ and finally the texture coordinates are obtained as $u = a / c$ and $v = b / c$. It turns out this computes a ray-plane intersection, and $c$ is the dot product between the plane normal and view ray direction! This can be guessed in the article from the expression of Oc,Hc,Vc that is the cross product of M and N, two vectors defining the texture plane, and hence the texture plane normal. But we don't have to guess, because Sean Barrett wrote [another article detailing this idea](https://nothings.org/gamedev/ray_plane.html)!
+In [this 1994 article](http://qzx.com/pc-gpe/texture.txt), Sean Barrett introduces the idea of rasterizing with planar texturing, with a technique using 9 'magic numbers'. Interestingly, these numbers are used to compute three values $a$, $b$, $c$ and finally the texture coordinates are obtained as $u = a / c$ and $v = b / c$. It turns out this computes a ray-plane intersection, and $c$ is the dot product between the plane normal and view ray direction! This can be guessed in the article from the expression of Oc,Hc,Vc that is the cross product of M and N, two vectors defining the texture plane, and hence the texture plane normal. But we don't have to guess, because Sean Barrett wrote [another article detailing this idea](https://nothings.org/gamedev/ray_plane.html).
 
-The only difference is that I store the precomputed dot product into a table, to avoid the per-pixel division (and that we can now implement this in hardware on an FPGA!).
+The only difference is that we precompute and store the dot product into a table, to turn the per-pixel division into a multiply (and that we can now implement this in hardware on an FPGA!).
 
 > Huge thanks to Sean Barrett for [discussions on z-constant and planar texture mapping](https://twitter.com/sylefeb/status/1565425789063020545). Make sure to read his [1994 PCGPE article](http://qzx.com/pc-gpe/texture.txt) that discusses many important aspects of texturing.
 
 ### On lightmaps
 
-A big challenge in the `q5k` demo was to support lightmaps: textures which contain light information blended with the standard color textures.
+A big challenge in the `q5k` demo (Quake viewer) was to support lightmaps: textures which contain light information blended with the standard color textures.
 
-The lightmaps of every polygon in the level are packed into standard textures (this is done by the [qrepack](demos/q5k/qrepack/qrepack.cc) tool). However the key question was how to blend the lightmaps with the color textures?
+The lightmaps of every polygon in the level are packed into standard textures (this is done by the [qrepack](demos/q5k/qrepack/qrepack.cc) tool). However the key question is how to blend the lightmaps with the color textures?
 
 <table>
 <tr>
