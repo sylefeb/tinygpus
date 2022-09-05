@@ -249,11 +249,13 @@ A big challenge in the `q5k` demo was to support lightmaps: textures which conta
 
 The lightmaps of every polygon in the level are packed into standard textures (this is done by the [qrepack](demos/q5k/qrepack/qrepack.cc) tool). However the key question was how to blend the lightmaps with the color textures?
 
-<center>
-<img src="docs/textures.jpg" width="200px"/> <font size=20px>+</font>
-<img src="docs/lmaps.jpg" width="200px"/> <font size=20px>=</font>
-<img src="docs/both.jpg" width="200px"/>
-</center>
+<table>
+<tr>
+<td><img src="docs/textures.jpg" width="200px"/></td><td><font size=20px>+</font></td>
+<td><img src="docs/lmaps.jpg" width="200px"/></td><td><font size=20px>=</font></td>
+<td><img src="docs/both.jpg" width="200px"/></td>
+</tr>
+</table>
 
 Fortunately, the per-column buffers of the DMC-1 (see `colbufs` in [the design](hardware/GPUs/dmc-1/dmc-1.si)) store 16 bits per pixel: 8 bits for a color byte (index in the palette), and an 8-bits light level. That is because I do not use the Doom/Quake palette trick for lighting, but instead dim the actual RGB values after palette lookup, before sending data to the screen.
 
