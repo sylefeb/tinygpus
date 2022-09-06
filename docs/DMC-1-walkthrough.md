@@ -234,7 +234,7 @@ This is done through memory mapping,
 intercepting memory addresses that are outside the range of the actual available
 memory. Because each command is 64 bits, this takes two memory writes:
 
-<!-- MARKDOWN-AUTO-DOCS:START (CODE:src=../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si&syntax=c&lines=413-423) -->
+<!-- MARKDOWN-AUTO-DOCS:START (CODE:src=../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si&syntax=c&lines=482-492) -->
 <!-- The below code snippet is automatically added from ../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si -->
 ```c
 $end
@@ -255,7 +255,7 @@ The `case 4b0001:` is part of a `switch` performed on accessed memory addresses,
 when a high bit of the address is set (well outside the truly available
 memory space):
 
-<!-- MARKDOWN-AUTO-DOCS:START (CODE:src=../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si&syntax=c&lines=371-372) -->
+<!-- MARKDOWN-AUTO-DOCS:START (CODE:src=../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si&syntax=c&lines=415-417) -->
 <!-- The below code snippet is automatically added from ../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si -->
 ```c
     txm_io.busy             = txm.busy;
@@ -276,7 +276,7 @@ full, so that the CPU can still send a few commands. But then it should stop, or
 the FIFO will overflow and bad things happen (typically, the GPU hangs).
 
 We send the next command to the GPU with these two lines:
-<!-- MARKDOWN-AUTO-DOCS:START (CODE:src=../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si&syntax=c&lines=428-430) -->
+<!-- MARKDOWN-AUTO-DOCS:START (CODE:src=../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si&syntax=c&lines=561-563) -->
 <!-- The below code snippet is automatically added from ../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si -->
 ```c
             case 2b00: { // LEDs from CPU
@@ -289,7 +289,7 @@ The first line pulses `gpu.valid` to tell the GPU to process the command, while
 `cmdq.in_next` tells the command queue to move to the next command. The command
 itself is given to the GPU through a binding:
 
-<!-- MARKDOWN-AUTO-DOCS:START (CODE:src=../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si&syntax=c&lines=320-322) -->
+<!-- MARKDOWN-AUTO-DOCS:START (CODE:src=../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si&syntax=c&lines=336-337) -->
 <!-- The below code snippet is automatically added from ../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si -->
 ```c
   uart_receiver urecv(
@@ -299,10 +299,9 @@ itself is given to the GPU through a binding:
 <!-- MARKDOWN-AUTO-DOCS:END -->
 
 The GPU is driving the screen directly, with the CPU only having access during
-initialization (a similar situation than with the flash memory). This can be
-seen in particular in this part of the SOC:
+initialization. This can be seen in particular in this part of the SOC:
 
-<!-- MARKDOWN-AUTO-DOCS:START (CODE:src=../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si&syntax=c&lines=356-359) -->
+<!-- MARKDOWN-AUTO-DOCS:START (CODE:src=../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si&syntax=c&lines=401-404) -->
 <!-- The below code snippet is automatically added from ../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si -->
 ```c
                       ~cmdq.full
@@ -315,7 +314,7 @@ seen in particular in this part of the SOC:
 Note that `screen_ctrl.in_data` receives data either from the GPU
 or the CPU. The CPU can trigger `screen_ctrl.valid` through a memory mapped address:
 
-<!-- MARKDOWN-AUTO-DOCS:START (CODE:src=../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si&syntax=c&lines=394-396) -->
+<!-- MARKDOWN-AUTO-DOCS:START (CODE:src=../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si&syntax=c&lines=439-441) -->
 <!-- The below code snippet is automatically added from ../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si -->
 ```c
       txm_burst_read_active    = txm_burst_len != 0;
