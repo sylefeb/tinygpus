@@ -42,7 +42,7 @@ typedef struct {
 } t_qrtexs;
 
 // array of texturing data
-#define MAX_RASTER_FACES 500
+#define MAX_RASTER_FACES 400
 t_qrtexs          rtexs[MAX_RASTER_FACES];
 
 // -----------------------------------------------------
@@ -79,7 +79,7 @@ typedef struct s_span {
   unsigned short next; // span pos in span_pool
 } t_span;
 
-#define MAX_NUM_SPANS 11000
+#define MAX_NUM_SPANS 10000
 t_span         span_pool   [MAX_NUM_SPANS];
 unsigned short span_heads_0[SCREEN_WIDTH]; // span pos in span_pool
 unsigned short span_heads_1[SCREEN_WIDTH]; // span pos in span_pool

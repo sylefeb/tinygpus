@@ -21,7 +21,8 @@ mkdir -p build
 OBJECTS="build/code.o"
 
 if [[ -z "${CONFIG_LD}" ]]; then
-  CFG_LD="config_c.ld"
+  #CFG_LD="config_c.ld"
+  CFG_LD="config_c_swirl.ld"
 else
   CFG_LD="${CONFIG_LD}"
 fi
