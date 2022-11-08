@@ -312,7 +312,6 @@ end
 in_pal:close()
 
 -- write palette for design
-
 local out = assert(io.open(path .. '../build/palette666.si', "w"))
 out:write('$$palette666 = \'')
 for c=1,256 do
