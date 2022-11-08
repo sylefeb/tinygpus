@@ -33,9 +33,9 @@ $$n_fifo     = 1<<log_n_fifo
 
   always {
 
-    uint$log_n_fifo$ waddr_p1 <:: waddr + $log_n_fifo$d1;
-    uint1 is_empty            <:: waddr_p1 == fifo.addr0;
-    uint1 near_last           <:: (waddr + $log_n_fifo$d15) == fifo.addr0;
+    uint$log_n_fifo$ waddr_p1 = waddr + $log_n_fifo$d1;
+    uint1 is_empty            = waddr_p1 == fifo.addr0;
+    uint1 near_last           = (waddr + $log_n_fifo$d15) == fifo.addr0;
     uint1 is_full(0);
 
     // output status

@@ -117,9 +117,9 @@ unit texture_sampler(
   uint11 v(0);          // v fetch coordinate
   uint24 fetch_addr(0); // fetch address (from u,v)
   always {
-    uint1  startbind  <:: (~binding[0,1]) & smplr.do_bind;
-    uint11 modu       <:: ((1<<tex_wp2)-1);
-    uint11 modv       <:: ((1<<tex_hp2)-1);
+    uint1  startbind = (~binding[0,1]) & smplr.do_bind;
+    uint11 modu      = ((1<<tex_wp2)-1);
+    uint11 modv      = ((1<<tex_hp2)-1);
     // update binding (takes multiple cycles, continues while binding[0,1] == 1)
     binding       = reset ? 0 : startbind ? 5b11111
                               : (txm.data_available ? binding>>1 : binding);
@@ -298,27 +298,27 @@ $$end
   always {
     // ---- depth buffer
     // depth test
-    uint31 dist    <:: (terrain ?  {12b0,tcol_dist[5,19]} : 31b0)
-                     | (plane   ?       {ray_t[0,30],1b0} : 31b0)
-                     | (wall    ? {{15{in_command[47,1]}},in_command[32,16]} : 31b0);
+    uint31 dist    = (terrain ?  {12b0,tcol_dist[5,19]} : 31b0)
+                   | (plane   ?       {ray_t[0,30],1b0} : 31b0)
+                   | (wall    ? {{15{in_command[47,1]}},in_command[32,16]} : 31b0);
     //                             ^^^^^^^^^^^ ensures max is behing anything
-    uint1 depth_ok <::    (depth(depths.rdata0).b ^ buffer)
+    uint1 depth_ok =    (depth(depths.rdata0).b ^ buffer)
     //                                              ^^^^^ ignore prev. frame
-                        | (dist <= depth(depths.rdata0).d);
+                   | (dist <= depth(depths.rdata0).d);
     // darkening with distance
-    uint4  obscure_dist <:: (|dist[16,15]) ? 15 : dist[12,4];
-    //                       ^^^^^^^^^^^ beyond lowest level
-    uint4  obscure_clmp <:: obscure_dist > 10 ? 10 : obscure_dist;
-    int5   light        <:: (__signed({1b0,in_command[26,4]})
-                           - __signed({1b0,obscure_clmp[0,4]}));
+    uint4  obscure_dist = (|dist[16,15]) ? 15 : dist[12,4];
+    //                     ^^^^^^^^^^^ beyond lowest level
+    uint4  obscure_clmp = obscure_dist > 10 ? 10 : obscure_dist;
+    int5   light        = (__signed({1b0,in_command[26,4]})
+                         - __signed({1b0,obscure_clmp[0,4]}));
     // opactiy test
-    uint1 opaque     <:: ~tcol_rdy & ~skip[0,1] & ((sampler_io.texel != 255) | lmapmode);
-    uint1 bkg        <:: sampler_io.tex_id == 0; // in background
+    uint1 opaque     = ~tcol_rdy & ~skip[0,1] & ((sampler_io.texel != 255) | lmapmode);
+    uint1 bkg        = sampler_io.tex_id == 0; // in background
     // final tex coords for walls
-    uint8 wc_u_8     <:: (wc_u     );
-    uint8 wc_v_8     <:: (wc_v >>11); // NOTE: has to match init
+    uint8 wc_u_8     = (wc_u     );
+    uint8 wc_v_8     = (wc_v >>11); // NOTE: has to match init
     // multiply and add
-    int32 result     <:: (a * b) + c;
+    int32 result     = (a * b) + c;
 
     // goes through transform computations
     // for both flats and terrain columns
@@ -376,7 +376,7 @@ $$end
 
     {
       // ---- output to color buffer
-      sameas(current) pixcoord <:: current;
+      sameas(current) pixcoord = current;
       //sameas(current) pixcoord <:: current;
       colbufs.addr1       = { buffer,pixcoord[0,$doomchip_height_p2$] };
       colbufs.wdata1      = ~lmapmode
@@ -410,15 +410,15 @@ $$end
     // access inv_y
     // NOTE: uses values from previous cycle (fmax)
     {
-      int24 neg_dot_ray <:: - dot_ray;
+      int24 neg_dot_ray = - dot_ray;
       inv_y .addr = terrain ? (tcol_rdy      ? tcol_dist[8,11]   : scrh_diff)
                             : (dot_ray[23,1] ? neg_dot_ray[8,11] : dot_ray[8,11]);
     }
 
     if (in_start) {
       // texture id on bindings
-      uint10 tex_id     <: in_command[0,10];
-      uint1  bkg_tex_id <: tex_id == 0; // is the incoming texid the background?
+      uint10 tex_id     = in_command[0,10];
+      uint1  bkg_tex_id = tex_id == 0; // is the incoming texid the background?
       // span init
       end                = terrain ? col_start : col_end;
       current            = col_start;
@@ -465,8 +465,8 @@ $$if SIMULATION then
 $$end
     } else { // in_start -------------------------------
 
-			uint1 still_drawing  <:: terrain ? ~terrain_done
-                                       : (~current_done | skip[0,1]);
+			uint1 still_drawing = terrain ? ~terrain_done
+                                    : (~current_done | skip[0,1]);
       //                                  ^^^^^^^^^^^^    ^^^^^^^^^
       //        still drawing if current not done or we are warming the pipeline
       //        this condition (skip[0,1]) is important for 1-pixel spans
@@ -484,8 +484,8 @@ $$end
 				drawing             = still_drawing; // keep drawing
 				if (tcol_rdy) {
 					// next column height has been computed, start next terrain span
-					int16 scrh     <:: (result>>>8) + 16d$doomchip_height//2$;
-					uint8 end_next <:: scrh[15,1] ? 8b0 : (scrh < col_end ? scrh[0,8] : col_end);
+					int16 scrh     = (result>>>8) + 16d$doomchip_height//2$;
+					uint8 end_next = scrh[15,1] ? 8b0 : (scrh < col_end ? scrh[0,8] : col_end);
 					scrh_diff = end_next - current;
 					tcol_rdy  = 0;
 					tc_v      = prev_tcol_dist;   // TODO add based on (current - end)
@@ -494,11 +494,11 @@ $$end
 					pickh_done = 1;
 				} else {
 					// advance along current
-					uint1  next_tcol_rdy  <:: terrain & current_done; // current span done?
-					uint2  step_shift     <:: tcol_dist[$8+9$,2];     // NOTE: dist < 2048
-					uint16 terrain_step   <:: 16d$terrain_step$ << step_shift;
-					uint14 tc_v_inc       <:: scrd_inc;
-					uint14 wc_v_inc       <:: __signed(in_command[32,14]);
+					uint1  next_tcol_rdy  = terrain & current_done; // current span done?
+					uint2  step_shift     = tcol_dist[$8+9$,2];     // NOTE: dist < 2048
+					uint16 terrain_step   = 16d$terrain_step$ << step_shift;
+					uint14 tc_v_inc       = scrd_inc;
+					uint14 wc_v_inc       = __signed(in_command[32,14]);
 					tcol_rdy          = next_tcol_rdy;
 					prev_tcol_dist    = next_tcol_rdy ? tcol_dist : prev_tcol_dist;
 					tcol_dist         = next_tcol_rdy ? (tcol_dist + terrain_step) : tcol_dist;
@@ -671,13 +671,13 @@ $$end
     } else { // send next command asap
 
       // partially decode command
-      uint8 start    <:: next_command[10,8];
-      uint8 end      <:: next_command[18,8];
-      uint1 param    <:: &(next_command[30,2]);
-      uint1 empty    <:: ~param & (start > end);
-      uint1 eoc      <::  param & next_command[0,1]; // end of col
-      uint1 do_draw  <:: next_pending & ~eoc & ~drawer.busy;
-      uint1 do_send  <:: next_pending &  eoc & ~drawer.busy & ~sender.busy;
+      uint8 start    = next_command[10,8];
+      uint8 end      = next_command[18,8];
+      uint1 param    = &(next_command[30,2]);
+      uint1 empty    = ~param & (start > end);
+      uint1 eoc      =  param & next_command[0,1]; // end of col
+      uint1 do_draw  = next_pending & ~eoc & ~drawer.busy;
+      uint1 do_send  = next_pending &  eoc & ~drawer.busy & ~sender.busy;
       // drawer command
       drawer.in_command = (do_draw & ~empty) ? next_command : drawer.in_command;
       drawer.in_start   =  do_draw & ~empty;
