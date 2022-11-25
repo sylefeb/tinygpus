@@ -47,8 +47,8 @@ $$end
 
   always {
 
-    uint16 new_data <: in_data[0,16];
-    uint4  new_cfg  <: in_data[16,1]
+    uint16 new_data  = in_data[0,16];
+    uint4  new_cfg   = in_data[16,1]
                      ? 4b1010                  // two data bytes
                      : {2b0,1b1,in_data[8,1]}; // one byte, command or data
 
