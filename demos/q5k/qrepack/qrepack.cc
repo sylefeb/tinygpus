@@ -1083,7 +1083,7 @@ void packTextures(FILE *pack)
       int r6 = pal[c * 3 + 2] >> 2;
       int g6 = pal[c * 3 + 1] >> 2;
       int b6 = pal[c * 3 + 0] >> 2;
-      remap(r6); remap(g6); remap(b6);
+      // remap(r6); remap(g6); remap(b6);
       int rgb_666 = r6 | (g6 << 6) | (b6 << 12);
       fprintf(fpal, "%d,", rgb_666);
     }
