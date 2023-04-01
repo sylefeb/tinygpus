@@ -86,6 +86,8 @@ make simulation DEMO=q5k
 ___
 ### On the MCH2022 badge
 
+> The badge scripts require python dependencies: `pip install pyserial pyusb`
+
 Plugin the board and type:
 
 ```

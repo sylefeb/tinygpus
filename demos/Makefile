@@ -32,7 +32,7 @@ ifeq ($(BOARD),icebreaker)
 	iceprog build/$(BOARD)_standalone.bin
 else
 ifeq ($(BOARD),mch2022)
-	./build/webusb_fpga.py build/$(BOARD)_standalone.bin
+	./build/fpga.py build/$(BOARD)_standalone.bin
 else
 	echo "no yet implemented"
 endif
@@ -75,13 +75,13 @@ ifeq ($(BOARD),icebreaker)
 	iceprog build/$(BOARD).bin
 else
 ifeq ($(BOARD),mch2022)
-	./build/webusb_fpga.py build/write.bin
+	./build/fpga.py build/write.bin
 	sleep 0.5
 	python ./build/send.py $(MCH2022_PORT) 1048576 build/$(DEMO).img
-	./build/webusb_fpga.py build/write.bin
+	./build/fpga.py build/write.bin
 	sleep 0.5
 	python ./build/send.py $(MCH2022_PORT) 2097152 build/$(DATA_PACK)
-	./build/webusb_fpga.py build/$(BOARD).bin
+	./build/fpga.py build/$(BOARD).bin
 else
 	echo "no yet implemented"
 endif
@@ -92,7 +92,7 @@ ifeq ($(BOARD),icebreaker)
 	iceprog -o 2M build/$(DATA_PACK)
 else
 ifeq ($(BOARD),mch2022)
-	./build/webusb_fpga.py build/write.bin
+	./build/fpga.py build/write.bin
 	sleep 0.5
 	python ./build/send.py $(MCH2022_PORT) 2097152 build/$(DATA_PACK)
 else
@@ -105,7 +105,7 @@ ifeq ($(BOARD),icebreaker)
 	iceprog build/$(BOARD).bin
 else
 ifeq ($(BOARD),mch2022)
-	./build/webusb_fpga.py build/$(BOARD).bin
+	./build/fpga.py build/$(BOARD).bin
 else
 	echo "no yet implemented"
 endif
@@ -116,10 +116,10 @@ ifeq ($(BOARD),icebreaker)
 	iceprog -o 1M build/$(DEMO).img
 else
 ifeq ($(BOARD),mch2022)
-	./build/webusb_fpga.py build/write.bin
+	./build/fpga.py build/write.bin
 	sleep 0.5
 	python ./build/send.py $(MCH2022_PORT) 1048576 build/$(DEMO).img
-	./build/webusb_fpga.py build/$(BOARD).bin
+	./build/fpga.py build/$(BOARD).bin
 else
 	echo "no yet implemented"
 endif
@@ -127,8 +127,8 @@ endif
 
 mch2022prog:
 	mkdir -p build
-	-wget -nc https://raw.githubusercontent.com/badgeteam/mch2022-tools/master/webusb_fpga.py -O build/webusb_fpga.py
-	chmod 755 build/webusb_fpga.py
+	-wget -nc https://raw.githubusercontent.com/badgeteam/mch2022-tools/master/fpga.py -O build/fpga.py
+	chmod 755 build/fpga.py
 	-wget -nc https://github.com/sylefeb/mch2022-silice/raw/main/qpsram_loader/bitstreams/write.bin -O build/write.bin
 	-wget -nc https://github.com/sylefeb/mch2022-silice/raw/main/qpsram_loader/send.py -O build/send.py
 
