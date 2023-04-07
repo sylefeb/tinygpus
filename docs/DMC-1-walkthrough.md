@@ -195,15 +195,15 @@ transfer:
               // NOTE2: CPU cannot write to RAM while the burst occurs,
               //        and should wait on user_data, txm.busy bit
               // NOTE3: destination addresses have to be 32-bits aligned
-              uint1 len_else_dst    <:: prev_mem_wdata[31,1];
+              uint1 len_else_dst    = prev_mem_wdata[31,1];
               // ^^^ bit 31 indicates whether we are setting the length (bytes)
               // or the destination address (in ram)
-              uint1 src_and_trigger <:: prev_mem_wdata[30,1];
+              uint1 src_and_trigger = prev_mem_wdata[30,1];
               // ^^^ bit 31 indicates whether we are setting the source (in tex
               // memory) or the destination address (in ram)
               // Set size, then destination, then source (triggers the burst)
               if (len_else_dst) {
-                txm_burst_len         = prev_mem_wdata[2,22];
+                txm_burst_len       = prev_mem_wdata[2,22];
               } else {
                 if (~src_and_trigger) {
                   txm_burst_read_dst  = prev_mem_wdata[2,22];
@@ -221,7 +221,7 @@ RAM is being written every cycle and it can no longer fetch instruction.
 <!-- The below code snippet is automatically added from ../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si -->
 ```c
     // stall CPU on bursts
-    cpu.stall           = txm_burst_read_active;
+    cpu.stall_cpu       = txm_burst_read_active;
 ```
 <!-- MARKDOWN-AUTO-DOCS:END -->
 
