@@ -318,9 +318,9 @@ $$end
   uint10 blink(0);
   uint1  synched(0);
 
-  always {
+  uint1 screen_com <:: receiving & received_byte[0,1] & next_for_screen;
 
-    uint1 screen_com <:: receiving & received_byte[0,1] & next_for_screen;
+  always {
 
     gpu           .valid    = 0;
     cmdq          .in_add   = 0;
