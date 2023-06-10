@@ -19,11 +19,11 @@ The SOC instantiates six major components:
 <!-- MARKDOWN-AUTO-DOCS:START (CODE:src=../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si&syntax=c&lines=208-213) -->
 <!-- The below code snippet is automatically added from ../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si -->
 ```c
-  // RAM for CPU (SPRAM)
-  bram_port_io mem_io_ram;
-  bram_spram_32bits bram_ram(
-    pram               <:> mem_io_ram
-  );
+  // ==============================
+  // CPU
+  uint32 user_data(0);
+  bram_port_io mem_io_cpu;
+  rv32i_cpu cpu(
 ```
 <!-- MARKDOWN-AUTO-DOCS:END -->
 
@@ -32,13 +32,13 @@ The SOC instantiates six major components:
 <!-- MARKDOWN-AUTO-DOCS:START (CODE:src=../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si&syntax=c&lines=215-221) -->
 <!-- The below code snippet is automatically added from ../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si -->
 ```c
-  // CPU
-  uint32 user_data(0);
-  bram_port_io mem_io_cpu;
-  rv32i_cpu cpu(
-    user_data        <:: user_data,
     mem              <:> mem_io_cpu,
   );
+
+  // ==============================
+  // GPU
+  texmem_io     txm_io;
+  DMC_1_gpu gpu(txm          <:>  txm_io,
 ```
 <!-- MARKDOWN-AUTO-DOCS:END -->
 
@@ -47,10 +47,11 @@ The SOC instantiates six major components:
 <!-- MARKDOWN-AUTO-DOCS:START (CODE:src=../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si&syntax=c&lines=224-228) -->
 <!-- The below code snippet is automatically added from ../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si -->
 ```c
-  // GPU
-  texmem_io     txm_io;
-  DMC_1_gpu gpu(txm          <:>  txm_io,
-                screen_ready <:   screen_ctrl.ready);
+  // ==============================
+  // screen display
+  uint1 screen_valid(0);    uint1 screen_ready(0);
+  uint1 screen_send_dc(0);  uint8 screen_send_byte(0);
+  screen_controller screen_ctrl(
 ```
 <!-- MARKDOWN-AUTO-DOCS:END -->
 
@@ -59,13 +60,13 @@ The SOC instantiates six major components:
 <!-- MARKDOWN-AUTO-DOCS:START (CODE:src=../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si&syntax=c&lines=274-280) -->
 <!-- The below code snippet is automatically added from ../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si -->
 ```c
-  // texture memory
-$if MCH2022 or (SIMULATION and SIMUL_QPSRAM) then
-    qpsram_ram txm<@clock2x,!rst2x,reginputs> (
-      ram_clk  :> ram_clk,  ram_csn :>  ram_csn,
-      ram_io0 <:> ram_io0,  ram_io1 <:> ram_io1,
       ram_io2 <:> ram_io2,  ram_io3 <:> ram_io3,
     );
+$else -- not MCH2022
+    spiflash_rom_core txm<@clock2x,!rst2x,reginputs> (
+      sf_clk  :> sf_clk,    sf_csn  :> sf_csn,
+      sf_io0 <:> sf_io0,    sf_io1 <:> sf_io1,
+      sf_io2 <:> sf_io2,    sf_io3 <:> sf_io3,
 ```
 <!-- MARKDOWN-AUTO-DOCS:END -->
 
@@ -74,8 +75,7 @@ $if MCH2022 or (SIMULATION and SIMUL_QPSRAM) then
 <!-- MARKDOWN-AUTO-DOCS:START (CODE:src=../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si&syntax=c&lines=336-338) -->
 <!-- The below code snippet is automatically added from ../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si -->
 ```c
-  // command queue
-  command_queue cmdq(current :> gpu.command);
+  always {
 ```
 <!-- MARKDOWN-AUTO-DOCS:END -->
 
@@ -84,16 +84,17 @@ $if MCH2022 or (SIMULATION and SIMUL_QPSRAM) then
 <!-- MARKDOWN-AUTO-DOCS:START (CODE:src=../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si&syntax=c&lines=230-240) -->
 <!-- The below code snippet is automatically added from ../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si -->
 ```c
-  // screen display
-  uint1 screen_valid(0);    uint1 screen_ready(0);
-  uint1 screen_send_dc(0);  uint8 screen_send_byte(0);
-  screen_controller screen_ctrl(
-    screen_valid :> screen_valid,
     screen_ready <: screen_ready,
     send_dc      :> screen_send_dc,
     send_byte    :> screen_send_byte,
   );
   // ...
+
+$if MCH2022 then
+  screen_driver screen(
+    ready            :> screen_ready,
+    screen_d         :> lcd_d,
+    screen_dc        :> lcd_rs,
 ```
 <!-- MARKDOWN-AUTO-DOCS:END -->
 
@@ -161,10 +162,11 @@ First, note that the GPU is bound to a `texmem_io` group called `txm_io`:
 <!-- MARKDOWN-AUTO-DOCS:START (CODE:src=../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si&syntax=c&lines=224-228) -->
 <!-- The below code snippet is automatically added from ../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si -->
 ```c
-  // GPU
-  texmem_io     txm_io;
-  DMC_1_gpu gpu(txm          <:>  txm_io,
-                screen_ready <:   screen_ctrl.ready);
+  // ==============================
+  // screen display
+  uint1 screen_valid(0);    uint1 screen_ready(0);
+  uint1 screen_send_dc(0);  uint8 screen_send_byte(0);
+  screen_controller screen_ctrl(
 ```
 <!-- MARKDOWN-AUTO-DOCS:END -->
 
@@ -172,12 +174,12 @@ These variables are updated in the always block:
 <!-- MARKDOWN-AUTO-DOCS:START (CODE:src=../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si&syntax=c&lines=366-371) -->
 <!-- The below code snippet is automatically added from ../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si -->
 ```c
-    // track texture memory interface
-    dataAvail.valid         = txm_io.in_ready | txm_burst_read_active;
-    txm.in_ready            = txm_io.in_ready | txm_burst_read_active;
-    txm.addr                = txm_burst_read_active ? txm.addr : txm_io.addr;
-    txm_io.data             = txm.rdata;
     txm_io.busy             = txm.busy;
+$if MCH2022 then
+    txm.wenable             = 0; // we never write to PSRAM
+$end
+$if SIMULATION then
+    //if ((|mem_io_ram.wenable) & txm_burst_data_available) {
 ```
 <!-- MARKDOWN-AUTO-DOCS:END -->
 As you can see, this connects `txm_io` to `txm` which is the flash memory unit itself:
@@ -188,11 +190,6 @@ transfer:
 <!-- MARKDOWN-AUTO-DOCS:START (CODE:src=../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si&syntax=c&lines=449-472) -->
 <!-- The below code snippet is automatically added from ../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si -->
 ```c
-            case 2b10: { // texture memory CPU read
-              // NOTE1: assumes there cannot be collisions with
-              //        the texture sampler ; CPU should not drive
-              //        texture memory while draw calls are pending
-              // NOTE2: CPU cannot write to RAM while the burst occurs,
               //        and should wait on user_data, txm.busy bit
               // NOTE3: destination addresses have to be 32-bits aligned
               uint1 len_else_dst    = prev_mem_wdata[31,1];
@@ -212,6 +209,11 @@ transfer:
               txm.addr              = prev_mem_wdata[0,24];
               txm_burst_read_active = src_and_trigger; // start
               txm_burst_data_cursor = 5b10000;
+$if SIMULATION then
+              //if (src_and_trigger) {
+              //  __display("[cycle %d] BURST start, from @%x to @%x, len %d",iter,txm.addr,txm_burst_read_dst<<2,txm_burst_len);
+              //}
+$end
 ```
 <!-- MARKDOWN-AUTO-DOCS:END -->
 
@@ -220,8 +222,8 @@ RAM is being written every cycle and it can no longer fetch instruction.
 <!-- MARKDOWN-AUTO-DOCS:START (CODE:src=../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si&syntax=c&lines=380-381) -->
 <!-- The below code snippet is automatically added from ../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si -->
 ```c
-    // stall CPU on bursts
-    cpu.stall_cpu       = txm_burst_read_active;
+                                                : txm_burst_data;
+      txm_burst_data_cursor =
 ```
 <!-- MARKDOWN-AUTO-DOCS:END -->
 
@@ -237,17 +239,17 @@ memory. Because each command is 64 bits, this takes two memory writes:
 <!-- MARKDOWN-AUTO-DOCS:START (CODE:src=../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si&syntax=c&lines=482-492) -->
 <!-- The below code snippet is automatically added from ../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si -->
 ```c
-        case 4b0001: { // GPU commands
-          if (prev_mem_addr[0,1]) {
-            // received first half
-            cmdq.in_command[32,32] = prev_mem_wdata[0,32];
-          } else {
             // received second half
             cmdq.in_command[ 0,32] = prev_mem_wdata[0,32];
             // store in fifo
             cmdq.in_add = 1;
           }
         }
+        case 4b1000: { // GPU commands in part
+          switch (prev_mem_addr[6,4]) {
+            // tex0 PARAMETER_PLANE_A     (2<<30) | ((ny) & 1023)  | (((uy) & 1023)<<10) | (((vy) & 1023)<<20)
+            case 0: { // PARAMETER_PLANE_A_ny
+              cmdq.in_command[$32+ 0$,10] = prev_mem_wdata[0,10];
 ```
 <!-- MARKDOWN-AUTO-DOCS:END -->
 
@@ -258,9 +260,9 @@ memory space):
 <!-- MARKDOWN-AUTO-DOCS:START (CODE:src=../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si&syntax=c&lines=415-417) -->
 <!-- The below code snippet is automatically added from ../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si -->
 ```c
-    // memory mapping
-    if ((prev_mem_wenable != 0) & prev_mem_addr[16,1]) {
-      switch (prev_mem_addr[2,4]) {
+          uo.data_in       = prev_mem_wdata[ 0,8];
+          uo.data_in_ready = ~uo.busy;
+$if SIMULATION then
 ```
 <!-- MARKDOWN-AUTO-DOCS:END -->
 
@@ -280,9 +282,9 @@ We send the next command to the GPU with these two lines:
 <!-- MARKDOWN-AUTO-DOCS:START (CODE:src=../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si&syntax=c&lines=561-563) -->
 <!-- The below code snippet is automatically added from ../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si -->
 ```c
-    // send next command to GPU
-    gpu.valid    = gpu.ready & ~cmdq.empty;
-    cmdq.in_next = gpu.ready & ~cmdq.empty;
+    prev_mem_addr    = mem_io_cpu.addr;
+    prev_mem_wenable = mem_io_cpu.wenable;
+    prev_mem_wdata   = mem_io_cpu.wdata;
 ```
 <!-- MARKDOWN-AUTO-DOCS:END -->
 
@@ -293,8 +295,7 @@ itself is given to the GPU through a binding:
 <!-- MARKDOWN-AUTO-DOCS:START (CODE:src=../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si&syntax=c&lines=336-337) -->
 <!-- The below code snippet is automatically added from ../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si -->
 ```c
-  // command queue
-  command_queue cmdq(current :> gpu.command);
+  always {
 ```
 <!-- MARKDOWN-AUTO-DOCS:END -->
 
@@ -304,10 +305,10 @@ initialization. This can be seen in particular in this part of the SOC:
 <!-- MARKDOWN-AUTO-DOCS:START (CODE:src=../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si&syntax=c&lines=401-404) -->
 <!-- The below code snippet is automatically added from ../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si -->
 ```c
-    // screen interface
-    screen_ctrl   .valid    = gpu.screen_valid;
-    screen_ctrl   .in_data  = gpu.screen_valid
-                            ? {1b1,gpu.screen_data} : prev_mem_wdata[0,17];
+    screen.data_or_command  = screen_send_dc;
+    screen.byte             = screen_send_byte;
+    // uart: maintain low, pulse on send
+    uo.data_in_ready = 0;
 ```
 <!-- MARKDOWN-AUTO-DOCS:END -->
 
@@ -317,9 +318,9 @@ or the CPU. The CPU can trigger `screen_ctrl.valid` through a memory mapped addr
 <!-- MARKDOWN-AUTO-DOCS:START (CODE:src=../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si&syntax=c&lines=439-441) -->
 <!-- The below code snippet is automatically added from ../hardware/SOCs/ice40-dmc-1/soc-ice40-dmc-1-risc_v.si -->
 ```c
-            case 2b01: { // screen write from CPU
-              screen_ctrl.valid = 1;
-            }
+              oled_resn = ~ prev_mem_wdata[0,1];
+$elseif not MCH2022 then
+              o_resn    = ~ prev_mem_wdata[0,1];
 ```
 <!-- MARKDOWN-AUTO-DOCS:END -->
 
