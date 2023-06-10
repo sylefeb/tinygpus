@@ -36,7 +36,7 @@ $$ST7789             = 1
 $$SPRAM_128K         = 1
 
 $$if ICE40 then
-import('../../common/icebrkr_$master_freq$.v')
+import('../../common/icebrkr_$master_freq$_lock.v')
 import('../../common/ice40_spram.v')
 $$end
 
@@ -167,27 +167,22 @@ $$if LCD then
 $$end
 )
 $$if ICE40 then
-<@clock1x,!rst1x> {
+<@clock1x,!rst2x> {
 
   uint1 clock2x = uninitialized;
+  uint1 rst2x   = uninitialized;
   pll pllgen(
     clock_in  <: clock,
     clock_out :> clock2x,
+    reset     :> rst2x
   );
+  uint1 rst1x <: rst2x;
   uint1 clock1x = uninitialized;
   ice40_half_clock _(
     clock_in  <: clock2x,
     clock_out :> clock1x
   );
 
-  uint1 rst1x = uninitialized;
-  clean_reset r1x<@clock1x,!reset>(
-    out :> rst1x
-  );
-  uint1 rst2x = uninitialized;
-  clean_reset r2x<@clock2x,!reset>(
-    out :> rst2x
-  );
 $$elseif SIMULATION then
 <@clock1x> {
   uint1 clock1x = uninitialized;
