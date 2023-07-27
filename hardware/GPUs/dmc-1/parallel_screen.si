@@ -136,13 +136,13 @@ $$else
 $$end
 
   always {
+    scr_byte    =  byte;
+    scr_dc      =  data_or_command;
+    scr_trigger = ~valid;
 $$if SIMULATION then
     screen_d    = scr_byte;
     screen_dc   = scr_dc;
 $$end
-    scr_byte    =  byte;
-    scr_dc      =  data_or_command;
-    scr_trigger = ~valid;
 $$if SIMULATION then
     //if (valid) {
     //  __display("[lcd] sending byte %x, data: %b",byte,data_or_command);
