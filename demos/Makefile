@@ -17,9 +17,9 @@ $(BOARD) : build/$(BOARD).bin build/$(DEMO).img
 
 simulation : build/$(DATA_PACK) build/$(DEMO).img $(SOC_PATH)/soc-ice40-dmc-1-risc_v.si
 	mkdir -p build
-	head -c 1M < /dev/urandom > rnd.raw
+	head -c 1048576 < /dev/urandom > rnd.raw
 	cat rnd.raw build/$(DEMO).img > data_tmp.raw
-	truncate -s 2M data_tmp.raw
+	truncate -s 2097152 data_tmp.raw
 	cat data_tmp.raw build/$(DATA_PACK) > $(SOC_PATH)/data.raw
 	rm rnd.raw data_tmp.raw
 	make -C $(SOC_PATH) -f Makefile verilator
@@ -70,8 +70,8 @@ build/level.h:
 
 program_all: build/$(DATA_PACK) build/$(BOARD).bin build/$(DEMO).img
 ifeq ($(BOARD),icebreaker)
-	iceprog -o 2M build/$(DATA_PACK)
-	iceprog -o 1M build/$(DEMO).img
+	iceprog -o 2097152 build/$(DATA_PACK)
+	iceprog -o 1048576 build/$(DEMO).img
 	iceprog build/$(BOARD).bin
 else
 ifeq ($(BOARD),mch2022)
@@ -89,7 +89,7 @@ endif
 
 program_data: build/$(DATA_PACK)
 ifeq ($(BOARD),icebreaker)
-	iceprog -o 2M build/$(DATA_PACK)
+	iceprog -o 2097152 build/$(DATA_PACK)
 else
 ifeq ($(BOARD),mch2022)
 	./build/fpga.py build/write.bin
@@ -113,7 +113,7 @@ endif
 
 program_code: build/$(DEMO).img
 ifeq ($(BOARD),icebreaker)
-	iceprog -o 1M build/$(DEMO).img
+	iceprog -o 1048576 build/$(DEMO).img
 else
 ifeq ($(BOARD),mch2022)
 	./build/fpga.py build/write.bin
