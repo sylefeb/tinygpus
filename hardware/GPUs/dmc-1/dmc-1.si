@@ -22,11 +22,6 @@ $$doomchip_width     = 320
 $$doomchip_height    = 240
 $$doomchip_height_p2 = 8
 
-$$if SIMULATION then
-$$ profile           = nil
-$$ verbose           = 1
-$$end
-
 $$config['simple_dualport_bram_wmask_half_bytes_wenable1_width'] = 'data'
 
 // ---------------------------------------------------
@@ -154,6 +149,11 @@ unit texture_sampler(
         }
         tex_wp2        = txm.data[0,4]; // written last, so no condition
         tex_hp2        = txm.data[4,4];
+$$if SIMULATION then
+        if (binding[0,1] & ~binding[1,1]) {
+          __display("[gpu::texbind] %d @%x %dx%d",smplr.tex_id,tex_addr,tex_wp2,tex_hp2);
+        }
+$$end
       }
     } else {                                               // ---- fetching
       // fetch next sample
@@ -244,7 +244,7 @@ $$end
   uint1  tcol_rdy(0);       // a terrain column is ready (projected height)
   int24  tcol_dist(0);      // terrain column dist from view
   uint24 prev_tcol_dist(0); // previous terrain column dist from view
-  uint8  scrh_diff(0); // when drawing a terrain span, diff btw 'end - prev. end'
+  uint8  scrh_diff(0); // when drawing a terrain span, diff btw 'end-prev. end'
   uint11 terrain_dist <:: tcol_rdy ? tcol_dist[8,11] : tc_v[8,11];
   uint1  terrain_done <:: (tcol_dist[8,11] > in_command[32,11])
                         | (tcol_dist[$8+11$,1]); // max distance reached (2048)
@@ -267,8 +267,8 @@ $$end
   int32  a(0);  int32  b(0);  int32  c(0);
 
   // ---- orchestration
-$$if MCH2022 or (SIMULATION and SIMUL_QPSRAM) then
-  $$delay_bit = 12
+$$if MCH2022 or (SIMULATION and SIMUL_QPSRAM) or BROT then
+  $$delay_bit = 14
 $$else
   $$delay_bit = 9
 $$end
@@ -281,11 +281,11 @@ $$end
   // take into account the various delays for texel fetch
   // - LSB are most delayed
   // - only one of wall, plane, terrain is 1
-$$if MCH2022 or (SIMULATION and SIMUL_QPSRAM) then
-  // fetch is 10 cycles
-  $$ smplr_seq_init       = '{8b0,plane|wall,1b0,1b0,terrain}'
-  //                              ^^^^ plane and wall go as fast as texlkup
-  //                                                 ^^^ terrain needs +3 cyles
+$$if MCH2022 or (SIMULATION and SIMUL_QPSRAM) or BROT then
+  // fetch is 12 cycles  NOTE: could be shorter? was 10 on earlier controller
+  $$ smplr_seq_init       = '{10b0,plane|wall,1b0,1b0,terrain}'
+  //                               ^^^^ plane and wall go as fast as texlkup
+  //                                                  ^^^ terrain needs +3 cyles
   $$ smplr_seq_init_start = smplr_seq_init
 $$else
   // fetch is 7 cycles
@@ -377,7 +377,6 @@ $$end
     {
       // ---- output to color buffer
       sameas(current) pixcoord = current;
-      //sameas(current) pixcoord <:: current;
       colbufs.addr1       = { buffer,pixcoord[0,$doomchip_height_p2$] };
       colbufs.wdata1      = ~lmapmode
     ? { {(light[4,1] ? 4b0 : light[0,4]) | (bkg ? 4d15 : 4d0) , 4b0}, sampler_io.texel }
@@ -452,7 +451,7 @@ $$end
       // terrain, init column distance
       tcol_dist          = __signed({in_command[48,11],8b0});
       prev_tcol_dist     = __signed({in_command[48,11],8b0});
-      // statrt drawing
+      // start drawing
       drawing            = ~param; // if not param, we start drawing
       start              = ~param;
       // skip allow to warm up the pipeline
@@ -461,7 +460,7 @@ $$end
       tcol_rdy           = 0; // next column height ready
       pickh_done         = 0; // picking done
 $$if SIMULATION then
-      // __display("[gpu::span_drawer] span %d->%d",col_start,col_end);
+      // __display("[gpu::span_drawer] span %d->%d (texid:%d)",col_start,col_end,tex_id);
 $$end
     } else { // in_start -------------------------------
 
@@ -573,6 +572,13 @@ unit column_sender(
                     : (count == 8d$doomchip_height+1$) ? 0 // done
                     : active;
       colbufs.addr0 = { buffer, count[0,$doomchip_height_p2$] };
+
+$$if SIMULATION then
+      if (in_start) {
+        __display("[gpu::column_sender] -------- next column --------");
+      }
+$$end
+
     } -> { // stage 1
       // lookup next color in palette
       light         = hold ? light        : colbufs.rdata0[8,8];
@@ -641,7 +647,7 @@ $$end
   span_drawer drawer<reginputs>(
     colbufs   <:>  colbufs,
     txm       <:>  txm,
-    pickedh    :>  pickedh,
+    pickedh    :>  pickedh
   );
 
   column_sender sender<reginputs>(

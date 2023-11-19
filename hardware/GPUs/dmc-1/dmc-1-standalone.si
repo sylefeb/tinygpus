@@ -13,7 +13,7 @@
 
 $include("dmc-1.si")
 
-$$if MCH2022 or (SIMULATION and SIMUL_QPSRAM) then
+$$if MCH2022 or (SIMULATION and SIMUL_QPSRAM) or BROT then
   $include('../../common/qpsram2x.si')
 $$else
   $include('../../common/spiflash2x.si')
@@ -55,12 +55,17 @@ unit DMC_1_gpu_standalone(
   inout   uint1   ram_io1,
   inout   uint1   ram_io2,
   inout   uint1   ram_io3,
+  // debug interface
+  input   uint1   debug_read,
+  input   uint24  debug_addr,
+  output  uint1   debug_done(0),
+  output  uint8   debug_data(0),
 ) {
 
   // ==============================
   // texture memory
-$$if MCH2022 or (SIMULATION and SIMUL_QPSRAM) then
-  qpsram_ram txm<@clock2x,reginputs> (
+$$if MCH2022 or (SIMULATION and SIMUL_QPSRAM) or BROT then
+  qpsram_ram txm<@clock2x> (
     ram_clk  :> ram_clk,  ram_csn :>  ram_csn,
     ram_io0 <:> ram_io0,  ram_io1 <:> ram_io1,
     ram_io2 <:> ram_io2,  ram_io3 <:> ram_io3,
@@ -74,8 +79,12 @@ $$else
 $$end
   // adapts the data available pulse across clock domains
   adapterDataAvailable _<@clock2x>(
-    valid            <: txm_io.in_ready,
-    data_avail_pulse <: txm.rdata_available,
+    valid            <: txm.in_ready,
+$$if MCH2022 or (SIMULATION and SIMUL_QPSRAM) or BROT then
+    data_avail_pulse <: txm.data_next,
+$$else
+    data_avail_pulse <: txm.rdata_available, // FIXME: update all to new controller
+$$end
     data_avail_high  :> txm_io.data_available
   );
 
@@ -83,16 +92,46 @@ $$end
   // GPU
   texmem_io     txm_io;
   DMC_1_gpu gpu(txm <:> txm_io,
-                <:auto:>);
+                <:auto:>
+               );
 
-  always {
+  uint1 in_debug(0);
+  uint1 debug_in_ready(0);
+  always_before {
+    debug_done     = 0;
+    debug_in_ready = 0;
+  }
+
+  algorithm <autorun> {
+    while (1) {
+      if (debug_read) {
+        in_debug     = 1;
+        // wait for read (address is set in always_after)
+        while (1) {
+          debug_in_ready = 1;
+          if (txm_io.data_available) {
+            debug_done   = 1;
+            debug_data   = txm.rdata;
+            break;
+          }
+        }
+        in_debug     = 0;
+      }
+    }
+  }
+
+  always_after {
     // texture memory interface
-    txm.in_ready = txm_io.in_ready;
-    txm.addr     = txm_io.addr;
+    //txm.in_ready = txm_io.in_ready;
+    //txm.addr     = txm_io.addr;
+    txm.in_ready = in_debug ? debug_in_ready : txm_io.in_ready;
+    txm.addr     = in_debug ? debug_addr     : txm_io.addr;
     txm_io.data  = txm.rdata;
     txm_io.busy  = txm.busy;
-$$if MCH2022 or (SIMULATION and SIMUL_QPSRAM) then
+$$if MCH2022 or (SIMULATION and SIMUL_QPSRAM) or BROT then
     txm.wenable  = 0;
+    txm.wdata    = 0;
+    txm.init     = 0;
 $$end
   }
 

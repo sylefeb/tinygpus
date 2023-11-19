@@ -22,7 +22,7 @@ Two 32 bits words: Tex1, Tex0
 Draw command types: wall (00), plane (01), terrain (10), parameter (11)
 
 ___
-### **Tex1** tag, texture id, column start/end
+### **Tex1** tag, texture id, span start/end in column
 
 ___
 __wall, plane, terrain__ (`tag != 2b11`)
@@ -38,21 +38,25 @@ __parameter__ (`tag == 2b11`)
 
 |  31-30 (2) | 29-1 (29)                     |  0 (1)      |
 |------------|-------------------------------|-------------|
-| 2b11       | usage based on `tag2` in Tex0 |  end of col |
+| 2b11       | usage based on `tag2` in Tex0 |  0          |
 
 - __planeA data__ (`tag == 2b11` *and* `tag2 == 10`)
 
 |  31-30 (2) | 29 (1)  | 28-15 (14) | 14-1 (14) | 0 (1)      |
 |------------|---------|------------|-----------|------------|
-| 2b11       | unused  |    dv      |  du       | end of col |
+| 2b11       | unused  |    dv      |  du       | 0          |
 
 - __uv offset__ (`tag == 2b11` *and* `tag2 == 01`)
 
 |  31-30 (2) | 29-24 (4) | 25 (1)          | 24-1 (24) | 0 (1)      |
 |------------|-----------|-----------------|-----------|------------|
-| 2b11       | unused    | lightmap enable | u_offset  | end of col |
+| 2b11       | unused    | lightmap enable | u_offset  | 0          |
 
-__end of column__ (`tag == 2b11` and `end of column == 1`)
+- __end of column__ (`tag == 2b11` and `bit 0 == 1`)
+
+|  31-30 (2) | 29-24 (4) | 25 (1)          | 24-1 (24) | 0 (1)      |
+|------------|-----------|-----------------|-----------|------------|
+| 2b11       | unused    | unused          | unused    | 1          |
 
 Note: the command is not passed further and thus there is no confusion with
 the other cases.

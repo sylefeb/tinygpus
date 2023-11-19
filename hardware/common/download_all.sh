@@ -25,4 +25,4 @@ wget $OPT $SILICE_URL/projects/common/verilator_data.v
 wget $OPT $SILICE_URL/projects/spiflash/spiflash2x.si
 wget $OPT $SILICE_URL/projects/spiflash/ddr_clock.v
 wget $OPT $SILICE_URL/projects/ice-v/CPUs/ice-v-dual.si
-wget $OPT $MCH2022_SILICE_URL/common/qpsram2x.si
+wget $OPT $MCH2022_SILICE_URL/common/qpsram2x.si -O qpsram2x_gpu.si

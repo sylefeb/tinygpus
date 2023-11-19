@@ -37,6 +37,18 @@ end
 -- -------------------------------------
 print('generating raw texture file')
 
+-- select a subset for testing ----------------------------- HACK HACK HACK
+local tmp_texture_ids  = texture_ids
+local tmp_num_textures = num_textures
+--
+texture_ids  = {}
+num_textures = 16 -- how many to select
+for i = 1,num_textures do
+  if id_to_texture[i] then
+    texture_ids[id_to_texture[i]] = tmp_texture_ids[id_to_texture[i]]
+  end
+end
+
 -- build texture start address table
 -- note: addresses are 24 bits
 texture_start_addr = texture_data_offset    -- start offset in memory
@@ -102,6 +114,7 @@ for i = 1,num_textures do
     if hp2 >= 16 then
       error('texture height is too large! ' .. id_to_texture[i]);
     end
+    print('    wp2 = ' .. wp2 .. ' hp2 = ' .. hp2)
     out:write(string.pack('B',(hp2<<4)|wp2)) -- now packed together
     out:write(string.pack('B',0))
     addr_check = addr_check + 2
@@ -123,6 +136,7 @@ for i = 1,num_textures do
 end
 -- dump texture data
 for tex,_ in pairs(texture_ids) do
+  print('adding texture ' .. tex)
   if tex ~= 'F_SKY1' then -- skip sky entirely
     local addr = texture_start_addr_table[tex]
     if (addr ~= addr_check) then
@@ -146,3 +160,7 @@ out:close()
 
 print('stored ' .. addr_check .. ' texture bytes\n')
 print('total: ' .. num_textures .. ' textures\n\n')
+
+-- restore
+texture_ids  = tmp_texture_ids
+num_textures = tmp_num_textures
