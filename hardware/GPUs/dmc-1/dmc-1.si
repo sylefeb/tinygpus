@@ -610,12 +610,10 @@ $$end
       // FIXME: make this consistent across boards
 $$if GPU_EXPORT then
       screen_data   =  {r[1,5],g[0,6],b[1,5]};
-$$else
-$$if MCH2022 then
+$$elseif MCH2022 then
       screen_data   = ~{g[0,3],r[1,5],b[1,5],g[3,3]};
 $$else
       screen_data   =  {g[0,3],b[1,5],r[1,5],g[3,3]};
-$$end
 $$end
     }
   }
