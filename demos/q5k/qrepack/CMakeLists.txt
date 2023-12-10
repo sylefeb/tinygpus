@@ -9,6 +9,12 @@ include_directories(
 link_directories(
 )
 
+if (CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
+
+else()
+set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} --static")
+endif()
+
 add_definitions(-DSRC_PATH=\"${CMAKE_CURRENT_SOURCE_DIR}/\")
 
 SET(SOURCES
