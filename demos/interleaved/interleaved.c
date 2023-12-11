@@ -90,13 +90,13 @@ static inline void transform(short *x, short *y, short *z,short w)
 
 // -----------------------------------------------------
 
+trsf_surface      tsrfs[8];
+rconvex           rtris[8];
+rconvex_texturing rtexs[8];
+
 // draws all screen columns
 static inline void render_frame()
 {
-  trsf_surface      tsrfs[8];
-	rconvex           rtris[8];
-  rconvex_texturing rtexs[8];
-
   for (int tet = 0; tet < 2 ; ++tet) {
     // animation angle
     angle = tet ? (frame << 4) : -(frame << 5);

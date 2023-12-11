@@ -383,10 +383,11 @@ void main_1()
 
 // -----------------------------------------------------
 
+volatile int buf20[5];
+volatile int buf12[3];
+
 unsigned short locate_leaf()
 {
-  volatile int buf20[5];
-  volatile int buf12[3];
   unsigned short nid = 0/*root*/;
   while (1) {
     // reached a leaf?
@@ -476,6 +477,10 @@ void getLeaf(int leaf,volatile int **p_dst)
 
 // -----------------------------------------------------
 
+p3d trsf_vertices[POLY_MAX_SZ];
+p3d face_vertices[POLY_MAX_SZ];
+p2d face_prj_vertices[POLY_MAX_SZ];
+
 void renderLeaf(int core,const unsigned char *ptr)
 {
   if (ptr == 0) {
@@ -503,9 +508,6 @@ void renderLeaf(int core,const unsigned char *ptr)
     }
   }
   // rasterize faces
-  p3d trsf_vertices[POLY_MAX_SZ];
-  p3d face_vertices[POLY_MAX_SZ];
-  p2d face_prj_vertices[POLY_MAX_SZ];
   // num faces
   int numf = *(const int*)ptr;
   ptr += sizeof(int);
@@ -871,6 +873,8 @@ static inline void render_frame()
 
 void main_0()
 {
+  *LEDS = 13;
+
   unsigned char prev_uart_byte = 0;
 
   // --------------------------

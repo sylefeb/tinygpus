@@ -90,6 +90,10 @@ static inline void transform(short *x, short *y, short *z,short w)
 
 // -----------------------------------------------------
 
+trsf_surface      tsrfs[4];
+rconvex           rtris[4];
+rconvex_texturing rtexs[4];
+
 // draws all screen columns
 static inline void render_frame()
 {
@@ -102,9 +106,6 @@ static inline void render_frame()
     transform(&p.x,&p.y,&p.z,1);
 		project(&p, &prj_points[i]);
  	}
-  trsf_surface      tsrfs[4];
-	rconvex           rtris[4];
-  rconvex_texturing rtexs[4];
   const int *idx =  indices;
   for (int s = 0 ; s < 4 ; ++ s) {
     // transform the textured surfaces for rendering at this frame
