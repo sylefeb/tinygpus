@@ -196,7 +196,7 @@ $$end
     prev_addr           = pram.addr;
 
 $$if VERBOSE then
-    __display("MEMORY @%x (%b) in_bram:%b not_mapped:%b",pram.addr<<2,pram.wenable,in_bram,not_mapped);
+    // __display("MEMORY @%x (%b) in_bram:%b not_mapped:%b",pram.addr<<2,pram.wenable,in_bram,not_mapped);
 $$end
 
   }

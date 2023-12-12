@@ -31,7 +31,7 @@ fi
 
 $ARCH-as -march=$riscarch -mabi=ilp32 -o crt0.o crt0.s
 
-$ARCH-gcc -g -Os -nostartfiles -ffunction-sections -fdata-sections -fno-stack-protector -fno-pic -fno-builtin -march=$riscarch -mabi=ilp32 -I$CALL_DIR -I$API -I$SCRI_DIR -T $CFG_LD -o build/code.elf $CALL_DIR/$1 crt0.o
+$ARCH-gcc -g -O3 -nostartfiles -ffunction-sections -fdata-sections -fno-stack-protector -fno-pic -fno-builtin -march=$riscarch -mabi=ilp32 -I$CALL_DIR -I$API -I$SCRI_DIR -T $CFG_LD -o build/code.elf $CALL_DIR/$1 crt0.o
 
 $ARCH-objcopy -O verilog build/code.elf build/code.hex
 
