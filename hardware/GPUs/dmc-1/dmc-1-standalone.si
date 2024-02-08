@@ -55,11 +55,10 @@ unit DMC_1_gpu_standalone(
   inout   uint1   ram_io1,
   inout   uint1   ram_io2,
   inout   uint1   ram_io3,
-  // debug interface
-  input   uint1   debug_read,
-  input   uint24  debug_addr,
-  output  uint1   debug_done(0),
-  output  uint8   debug_data(0),
+  // direct memory interface (assumes GPU not busy!)
+  input   uint1   ram_write,
+  input   uint24  ram_addr,
+  input   uint32  ram_wdata,
 ) {
 
   // ==============================
@@ -95,42 +94,46 @@ $$end
                 <:auto:>
                );
 
-  uint1 in_debug(0);
-  uint1 debug_in_ready(0);
+  uint32 wdata(0);
+  uint1  reg_wstream(0);
+
   always_before {
-    debug_done     = 0;
-    debug_in_ready = 0;
+$$if MCH2022 or (SIMULATION and SIMUL_QPSRAM) or BROT then
+    txm.wenable  = 0;
+    txm.in_ready = txm_io.in_ready;
+    txm.addr     = txm_io.addr;
+$$end
   }
 
   algorithm <autorun> {
     while (1) {
-      if (debug_read) {
-        in_debug     = 1;
-        // wait for read (address is set in always_after)
-        while (1) {
-          debug_in_ready = 1;
-          if (txm_io.data_available) {
-            debug_done   = 1;
-            debug_data   = txm.rdata;
-            break;
+      if (ram_write) {
+        // setup write
+        txm.wenable  = 1;
+        txm.in_ready = 1;
+        wdata        = ram_wdata;
+        uint3 n      = 0;
+        while (~n[2,1]) {
+          txm.wenable  = 1;
+          txm.in_ready = 1;
+          if (reg_wstream) {
+            txm.wdata = wdata[24,8];
+            wdata     = wdata << 8;
+            n         = n + 1;
+            __display("[GPU] writing %x",txm.wdata);
           }
         }
-        in_debug     = 0;
       }
     }
   }
 
   always_after {
     // texture memory interface
-    //txm.in_ready = txm_io.in_ready;
-    //txm.addr     = txm_io.addr;
-    txm.in_ready = in_debug ? debug_in_ready : txm_io.in_ready;
-    txm.addr     = in_debug ? debug_addr     : txm_io.addr;
+    txm.addr     = txm.wenable ? ram_addr : txm_io.addr;
     txm_io.data  = txm.rdata;
     txm_io.busy  = txm.busy;
+    reg_wstream  = txm.wstream_1x;
 $$if MCH2022 or (SIMULATION and SIMUL_QPSRAM) or BROT then
-    txm.wenable  = 0;
-    txm.wdata    = 0;
     txm.init     = 0;
 $$end
   }
