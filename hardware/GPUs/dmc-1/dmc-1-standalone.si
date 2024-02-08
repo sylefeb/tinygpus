@@ -64,7 +64,7 @@ unit DMC_1_gpu_standalone(
   // ==============================
   // texture memory
 $$if MCH2022 or (SIMULATION and SIMUL_QPSRAM) or BROT then
-  qpsram_ram txm<@clock2x> (
+  qpsram_ram txm<@clock2x,reginputs> (
     ram_clk  :> ram_clk,  ram_csn :>  ram_csn,
     ram_io0 <:> ram_io0,  ram_io1 <:> ram_io1,
     ram_io2 <:> ram_io2,  ram_io3 <:> ram_io3,
@@ -95,7 +95,6 @@ $$end
                );
 
   uint32 wdata(0);
-  uint1  reg_wstream(0);
 
   always_before {
 $$if MCH2022 or (SIMULATION and SIMUL_QPSRAM) or BROT then
@@ -118,7 +117,8 @@ $$end
           txm.wenable  = 1;
           txm.addr     = ram_addr;
           txm.in_ready = 1;
-          if (reg_wstream) {
+          if (txm.wstream_1x) {
+            // ^^^^^^^^^^^ used directly as inputs are registered
             txm.wdata = wdata[24,8];
             wdata     = wdata << 8;
             n         = n + 1;
@@ -133,7 +133,6 @@ $$end
     // texture memory interface
     txm_io.data  = txm.rdata;
     txm_io.busy  = txm.busy;
-    reg_wstream  = txm.wstream_1x;
 $$if MCH2022 or (SIMULATION and SIMUL_QPSRAM) or BROT then
     txm.init     = 0;
 $$end
