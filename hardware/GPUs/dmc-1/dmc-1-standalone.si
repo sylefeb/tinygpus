@@ -110,11 +110,13 @@ $$end
       if (ram_write) {
         // setup write
         txm.wenable  = 1;
+        txm.addr     = ram_addr;
         txm.in_ready = 1;
         wdata        = ram_wdata;
         uint3 n      = 0;
         while (~n[2,1]) {
           txm.wenable  = 1;
+          txm.addr     = ram_addr;
           txm.in_ready = 1;
           if (reg_wstream) {
             txm.wdata = wdata[24,8];
@@ -129,7 +131,6 @@ $$end
 
   always_after {
     // texture memory interface
-    txm.addr     = txm.wenable ? ram_addr : txm_io.addr;
     txm_io.data  = txm.rdata;
     txm_io.busy  = txm.busy;
     reg_wstream  = txm.wstream_1x;
