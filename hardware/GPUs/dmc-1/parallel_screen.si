@@ -22,7 +22,7 @@
 
 unit screen_controller(
   input   uint1  valid,
-  output  uint1  ready,
+  output! uint1  ready,
   input   uint17 in_data,
   input   uint1  screen_ready,
   output  uint1  screen_valid,

@@ -390,7 +390,7 @@ $$end
       txm_burst_data_available = txm_burst_data_cursor[0,1];
     }
     // GPU commands
-    gpu           .valid    = 0;
+    gpu           .in_next  = 0;
     cmdq          .in_add   = 0;
     cmdq          .in_next  = 0;
     // screen interface
@@ -554,7 +554,7 @@ $$end
     }
 
     // send next command to GPU
-    gpu.valid    = gpu.ready & ~cmdq.empty;
+    gpu.in_next  = gpu.ready & ~cmdq.empty;
     cmdq.in_next = gpu.ready & ~cmdq.empty;
 
     // refresh memory mappings with a one cycle latency to not pressure fmax

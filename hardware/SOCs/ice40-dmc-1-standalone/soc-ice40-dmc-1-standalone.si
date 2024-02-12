@@ -322,7 +322,7 @@ $$end
 
   always {
 
-    gpu           .valid    = 0;
+    gpu           .in_next  = 0;
     cmdq          .in_add   = 0;
     cmdq          .in_next  = 0;
     screen_ctrl   .valid    = (screen_com & ~received[32,1]) | gpu.screen_valid;
@@ -372,7 +372,7 @@ $$end
     }
 
     // send next command to GPU?
-    gpu.valid    = gpu.ready & ~cmdq.empty;
+    gpu.in_next  = gpu.ready & ~cmdq.empty;
     cmdq.in_next = gpu.ready & ~cmdq.empty;
 
 $$if SIMULATION then

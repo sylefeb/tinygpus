@@ -40,7 +40,7 @@ unit adapterDataAvailable(
 
 unit DMC_1_gpu_standalone(
   // command interface
-  input   uint1   valid, // pulse
+  input   uint1   in_next, // pulse
   output  uint1   ready,
   input   uint64  command,
   // screen interface
