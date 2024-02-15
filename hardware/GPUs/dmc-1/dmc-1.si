@@ -558,9 +558,7 @@ unit column_sender(
   uint1  hold(0);
   uint18 pal(0);
   uint6  r(0);  uint6  g(0);  uint6  b(0);
-$$if SIMULATION then
-  uint32 cycle(0);
-$$end
+
   always {
     // light level adjustment
     uint8  light(0);
@@ -571,7 +569,7 @@ $$end
       count         = in_start ? 0 : ((hold | ~active) ? count : count + 1);
       //                                      ^^^^^^ not necessary, helps debug
       active        = in_start                               ? 1 // first
-                    : (count == 8d$doomchip_height$) ? 0 // done
+                    : (count == 8d$doomchip_height+1$) ? 0 // done
                     : active;
       colbufs.addr0 = { buffer, count[0,$doomchip_height_p2$] };
 
@@ -582,17 +580,13 @@ $$if SIMULATION then
 $$end
 
     } -> { // stage 1
+
       // lookup next color in palette
-$$if SIMULATION then
-      uint8 prev_count(0); count = hold ? prev_count : count; prev_count = count;
-$$end
       light         = hold ? light        : colbufs.rdata0[8,8];
       palette.addr  = hold ? palette.addr : colbufs.rdata0[0,8];
 
     } -> { // stage 2
-$$if SIMULATION then
-      uint8 prev_count(0); count = hold ? prev_count : count; prev_count = count;
-$$end
+
       uint8 prev_light(0);
       uint14 ro(0); uint14 go(0); uint14 bo(0);
       uint10 hr(0); uint10 lr(0);
@@ -612,31 +606,21 @@ $$end
       //  available and synthesis would fail!
       r  = ro >> 8;       g  = go >> 8;       b  = bo >> 8;
     } -> { // stage 3
-$$if SIMULATION then
-      uint8 prev_count(0); count = hold ? prev_count : count; prev_count = count;
-$$end
       screen_valid  = active;
       hold         ^= active & ~screen_ready;
       //          ^^^^ other stages see this immediately
       busy          = active;
       // FIXME: make this consistent across boards
-$$if GPU_EXPORT then
+$$if BROT then
+      screen_data   =  {g[0,3],b[1,5],r[1,5],g[3,3]};
+$$elseif GPU_EXPORT then
       screen_data   =  {r[1,5],g[0,6],b[1,5]};
 $$elseif MCH2022 then
       screen_data   = ~{g[0,3],r[1,5],b[1,5],g[3,3]};
 $$else
       screen_data   =  {g[0,3],b[1,5],r[1,5],g[3,3]};
 $$end
-$$if SIMULATION then
-      // screen_data   = count;
-      if (active) {
-        // __display("[gpu::column_sender %d] hold:%b %x (%d) [screen out_valid:%b in_ready:%b]",cycle,hold,screen_data,count,screen_valid,screen_ready);
-      }
-$$end
     }
-$$if SIMULATION then
-    cycle = cycle + 1;
-$$end
   }
 }
 
