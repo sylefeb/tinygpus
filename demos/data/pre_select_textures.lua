@@ -45,6 +45,8 @@ print('num flats  : ' .. #lumps_flats)
 print('num sprites: ' .. #lumps_sprites)
 
 
+--[[
+
 -- -------------------------------------
 -- add textures for the terrain
 -- remap colors
@@ -85,3 +87,5 @@ local t = '../../terrain'
 num_textures       = num_textures + 1
 texture_ids[t]     = {id=num_textures,type='terrain',used=1}
 terrain_texture_id = num_textures
+
+]]

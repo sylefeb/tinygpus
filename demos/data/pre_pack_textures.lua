@@ -37,11 +37,12 @@ end
 -- -------------------------------------
 print('generating raw texture file')
 
--- select a subset for testing ----------------------------- HACK HACK HACK
+-- -------------------------------------
+-- select a subset for testing ----------------------- HACK HACK HACK (disabled)
 local tmp_texture_ids  = texture_ids
 local tmp_num_textures = num_textures
 --
-if false then
+if false then -- DISABLED
   texture_ids  = {}
   num_textures = 16 -- how many to select
   for i = 1,num_textures do
@@ -50,6 +51,7 @@ if false then
     end
   end
 end
+-- -------------------------------------
 
 -- build texture start address table
 -- note: addresses are 24 bits
@@ -68,6 +70,10 @@ end
 
 -- create raw image
 local out = assert(io.open(path .. '/../build/textures.img', "wb"))
+-- create tex info header
+local hdr = assert(io.open(path .. '/../build/textures.h', "wb"))
+hdr:write('typedef struct s_texture_nfo { int w; int h; } t_texture_nfo;\n')
+hdr:write('t_texture_nfo all_textures[] = {{-1,-1},\n')
 -- there is not texid 0
 local addr_check = texture_data_offset
 -- pad to 8 bytes
@@ -90,6 +96,9 @@ for i = 1,num_textures do
     print('index ' .. i .. ' texture ' .. id_to_texture[i] .. '@' ..  string.format("%06x",addr ) .. ' ' .. texture_ids[id_to_texture[i]].texw .. 'x' .. texture_ids[id_to_texture[i]].texh)
     -- save for preview
     -- save_table_as_image_with_palette(gettex(id_to_texture[i]),palette,path .. 'textures/' .. id_to_texture[i] .. '.tga')
+    -- write info in header
+    local texdata,truew,trueh = gettex(id_to_texture[i])
+    hdr:write('  {'..truew..','..trueh..'}, // '.. id_to_texture[i] ..'\n')
     -- address
     out:write(string.pack('B',  addr     &255 ))
     out:write(string.pack('B', (addr>> 8)&255 ))
@@ -159,6 +168,8 @@ for tex,_ in pairs(texture_ids) do
 end
 
 out:close()
+hdr:write('};\n')
+hdr:close()
 
 print('stored ' .. addr_check .. ' texture bytes\n')
 print('total: ' .. num_textures .. ' textures\n\n')
