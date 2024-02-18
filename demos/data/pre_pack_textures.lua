@@ -41,11 +41,13 @@ print('generating raw texture file')
 local tmp_texture_ids  = texture_ids
 local tmp_num_textures = num_textures
 --
-texture_ids  = {}
-num_textures = 16 -- how many to select
-for i = 1,num_textures do
-  if id_to_texture[i] then
-    texture_ids[id_to_texture[i]] = tmp_texture_ids[id_to_texture[i]]
+if false then
+  texture_ids  = {}
+  num_textures = 16 -- how many to select
+  for i = 1,num_textures do
+    if id_to_texture[i] then
+      texture_ids[id_to_texture[i]] = tmp_texture_ids[id_to_texture[i]]
+    end
   end
 end
 
