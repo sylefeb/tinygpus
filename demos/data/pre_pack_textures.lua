@@ -143,6 +143,7 @@ for i = 1,num_textures do
       out:write(string.pack('B', 0 ))
       addr_check = addr_check + 1
     end
+    hdr:write('  {-1,-1},\n')
   end
 end
 -- dump texture data
