@@ -151,7 +151,7 @@ unit texture_sampler(
         tex_hp2        = txm.data[4,4];
 $$if SIMULATION then
         if (binding[0,1] & ~binding[1,1]) {
-          __display("[gpu::texbind] %d @%x %dx%d",smplr.tex_id,tex_addr,tex_wp2,tex_hp2);
+        //  __display("[gpu::texbind] %d @%x %dx%d",smplr.tex_id,tex_addr,tex_wp2,tex_hp2);
         }
 $$end
       }
@@ -575,7 +575,7 @@ unit column_sender(
 
 $$if SIMULATION then
       if (in_start) {
-        __display("[gpu::column_sender] -------- next column --------");
+      //  __display("[gpu::column_sender] -------- next column --------");
       }
 $$end
 
@@ -640,6 +640,8 @@ unit DMC_1_gpu(
 $$if SIMULATION then
   uint32 cycle(0);
   uint32 cycle_in_commands(0);
+  uint32 cycle_in_drawer(0);
+  uint32 cycle_in_sender(0);
 $$end
   // column double buffers
   // - first  [0                    .. 2^doomchip_height_p2-1    ]
@@ -697,17 +699,26 @@ $$end
       // did we do anything?
       next_pending      = next_pending & ~(do_draw | do_send);
 $$if SIMULATION then
+      if (drawer.busy | sender.busy | do_draw | do_send) {
+        cycle_in_commands = cycle_in_commands + 1;
+      }
+      if (drawer.busy | do_draw) {
+        cycle_in_drawer = cycle_in_drawer + 1;
+      }
+      if (sender.busy | do_send) {
+        cycle_in_sender = cycle_in_sender + 1;
+      }
       if (do_send) {
         uint9 nsent(0);
         if (nsent == 319) {
-          __display("[GPU] cycles in commands: %d",cycle_in_commands);
+          __display("[GPU] cycles in commands: %d (drawer: %d, sender: %d)",cycle_in_commands,cycle_in_drawer,cycle_in_sender);
           nsent = 0;
+          cycle_in_commands = 0;
+          cycle_in_drawer = 0;
+          cycle_in_sender = 0;
         } else {
           nsent = nsent + 1;
         }
-      }
-      if (drawer.busy | sender.busy | do_draw | do_send) {
-        cycle_in_commands = cycle_in_commands + 1;
       }
 $$end
     }
