@@ -46,11 +46,12 @@ __parameter__ (`tag == 2b11`)
 |------------|---------|------------|-----------|------------|
 | 2b11       | unused  |    dv      |  du       | 0          |
 
-- __uv offset__ (`tag == 2b11` *and* `tag2 == 01`)
+- __uv offset and render state__ (`tag == 2b11` *and* `tag2 == 01`).
+ Offsets are set only if `mask offsets == 0`.
 
-|  31-30 (2) | 29-24 (4) | 25 (1)          | 24-1 (24) | 0 (1)      |
-|------------|-----------|-----------------|-----------|------------|
-| 2b11       | unused    | lightmap enable | u_offset  | 0          |
+|  31-30 (2) | 29 (1)       | 28-26 (3) | 26 (1)             | 25 (1)          | 24-1 (24) | 0 (1)      |
+|------------|--------------|-----------|--------------------|-----------------|-----------|------------|
+| 2b11       | mask offsets | unused    | depth test disable | lightmap enable | u_offset  | 0          |
 
 - __end of column__ (`tag == 2b11` and `bit 0 == 1`)
 

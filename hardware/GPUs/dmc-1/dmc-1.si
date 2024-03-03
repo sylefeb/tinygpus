@@ -226,6 +226,7 @@ $$end
 
   // ---- render state
   uint1  lmapmode(0);    // 1 when in lightmap mode
+  uint1  depthtest(1);   // 1 when depth test active
 
   // ---- plane (perspective)
   int24  dot_u(0);
@@ -304,7 +305,8 @@ $$end
     //                             ^^^^^^^^^^^ ensures max is behing anything
     uint1 depth_ok =    (depth(depths.rdata0).b ^ buffer)
     //                                              ^^^^^ ignore prev. frame
-                   | (dist <= depth(depths.rdata0).d);
+                   | (dist <= depth(depths.rdata0).d)
+                   | ~depthtest;
     // darkening with distance
     uint4  obscure_dist = (|dist[16,15]) ? 15 : dist[12,4];
     //                     ^^^^^^^^^^^ beyond lowest level
@@ -378,9 +380,11 @@ $$end
       // ---- output to color buffer
       sameas(current) pixcoord = current;
       colbufs.addr1       = { buffer,pixcoord[0,$doomchip_height_p2$] };
-      colbufs.wdata1      = ~lmapmode
+      colbufs.wdata1      = ~lmapmode //                        vvv pad low bits if light
     ? { {(light[4,1] ? 4b0 : light[0,4]) | (bkg ? 4d15 : 4d0) , 4b0}, sampler_io.texel }
+    //   ^^^^^^^^^^^ sign, clamp to 0       ^^^ bckg always lit
     : { sampler_io.texel, 8b0 };
+    //   ^^^^^^^^^^^ write to light
       colbufs.wenable1    = {4{smplr_delay[$delay_bit$,1] & depth_ok & opaque}}
                           & {2b11,~lmapmode,~lmapmode};
       // ---- read/write to depth buffer
@@ -424,11 +428,15 @@ $$end
       // ray cos/sin (terrain)
       cosray             = ray_cs ? __signed(in_command[32,14]) : cosray;
       sinray             = ray_cs ? __signed(in_command[46,14]) : sinray;
+      // set offsets
+      uint1 set_offsets  = uv_offs & ~in_command[29, 1];
       // u,v offsets (plane)
-      u_offset           = uv_offs? __signed(in_command[ 1,24]) : u_offset;
-      v_offset           = uv_offs? __signed(in_command[32,24]) : v_offset;
+      u_offset           = set_offsets ? __signed(in_command[ 1,24]) : u_offset;
+      v_offset           = set_offsets ? __signed(in_command[32,24]) : v_offset;
       // lightmap mode enable
-      lmapmode           = uv_offs? __signed(in_command[25, 1]) : lmapmode;
+      lmapmode           = uv_offs?  in_command[25, 1] : lmapmode;
+      // depth test enable
+      depthtest          = uv_offs? ~in_command[26, 1] : depthtest;
       // view_z
       view_z             = set_vwz? __signed(in_command[32,16]) : view_z;
       // plane span data
