@@ -308,9 +308,9 @@ $$end
                    | (dist <= depth(depths.rdata0).d)
                    | ~depthtest;
     // darkening with distance
-    uint4  obscure_dist = (|dist[16,15]) ? 15 : dist[12,4];
+    uint4  obscure_dist = (|dist[14,17]) ? 15 : dist[10,4];
     //                     ^^^^^^^^^^^ beyond lowest level
-    uint4  obscure_clmp = obscure_dist > 10 ? 10 : obscure_dist;
+    uint4  obscure_clmp = obscure_dist; // > 10 ? 10 : obscure_dist;
     int5   light        = (__signed({1b0,in_command[26,4]})
                          - __signed({1b0,obscure_clmp[0,4]}));
     // opactiy test
@@ -468,13 +468,15 @@ $$end
       tcol_rdy           = 0; // next column height ready
       pickh_done         = 0; // picking done
 $$if SIMULATION then
-      // __display("[gpu::span_drawer] span %d->%d (texid:%d)",col_start,col_end,tex_id);
+      if (drawing) {
+      //  __display("[gpu::span_drawer] span %d->%d (texid:%d)",col_start,col_end,tex_id);
+      }
 $$end
-    } else { // in_start -------------------------------
+    } else { // ~in_start -------------------------------
 
 			uint1 still_drawing = terrain ? ~terrain_done
                                     : (~current_done | skip[0,1]);
-      //                                  ^^^^^^^^^^^^    ^^^^^^^^^
+      //                               ^^^^^^^^^^^^    ^^^^^^^^^
       //        still drawing if current not done or we are warming the pipeline
       //        this condition (skip[0,1]) is important for 1-pixel spans
 
@@ -583,7 +585,9 @@ unit column_sender(
 
 $$if SIMULATION then
       if (in_start) {
-      //  __display("[gpu::column_sender] -------- next column --------");
+        uint9 col(0);
+        col = col == 319 ? 0 : (col + 1);
+        // __display("[gpu::column_sender] -------- next column (%d) --------",col);
       }
 $$end
 
