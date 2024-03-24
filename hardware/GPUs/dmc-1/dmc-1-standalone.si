@@ -58,7 +58,11 @@ unit DMC_1_gpu_standalone(
   // direct memory interface (assumes GPU not busy!)
   input   uint1   ram_write,
   input   uint24  ram_addr,
-  input   uint32  ram_wdata,
+  input   uint64  ram_wdata, // {32b<data>,32b0} if 32 bits (see mask next)
+  input   uint2   ram_wmask, // 01 if 32 bits, 11 if 64 bits
+  input   uint1   ram_read,
+  output  uint8   ram_rdata,
+  output  uint1   ram_next_byte,
 ) {
 
   // ==============================
@@ -94,35 +98,37 @@ $$end
                 <:auto:>
                );
 
-  uint32 wdata(0);
+  uint64 wdata(0);
 
   always_before {
 $$if MCH2022 or (SIMULATION and SIMUL_QPSRAM) or BROT then
     txm.wenable  = 0;
-    txm.in_ready = txm_io.in_ready;
-    txm.addr     = txm_io.addr;
+    txm.in_ready = ram_read | txm_io.in_ready;
+    txm.addr     = ram_read ? ram_addr : txm_io.addr;
 $$end
   }
 
   algorithm <autorun> {
     while (1) {
       if (ram_write) {
+        uint24 waddr = ram_addr;
         // setup write
         txm.wenable  = 1;
-        txm.addr     = ram_addr;
+        txm.addr     = waddr;
         txm.in_ready = 1;
         wdata        = ram_wdata;
-        uint3 n      = 0;
-        while (~n[2,1]) {
+        uint4 n      = 0;
+        uint2 mask   = ram_wmask;
+        while (mask[1,1] ? ~n[3,1] : ~n[2,1]) {
           txm.wenable  = 1;
-          txm.addr     = ram_addr;
+          txm.addr     = waddr;
           txm.in_ready = 1;
           if (txm.wstream_1x) {
             // ^^^^^^^^^^^ used directly as inputs are registered
-            txm.wdata = wdata[24,8];
+            txm.wdata = wdata[56,8];
             wdata     = wdata << 8;
+            // __display("[GPU] writing %x @%x",txm.wdata,waddr + n);
             n         = n + 1;
-            __display("[GPU] writing %x",txm.wdata);
           }
         }
       }
@@ -136,6 +142,9 @@ $$end
 $$if MCH2022 or (SIMULATION and SIMUL_QPSRAM) or BROT then
     txm.init     = 0;
 $$end
+    // ram read
+    ram_rdata     = txm.rdata;
+    ram_next_byte = txm_io.data_available;
   }
 
 }
