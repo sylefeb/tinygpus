@@ -469,7 +469,7 @@ $$end
       pickh_done         = 0; // picking done
 $$if SIMULATION then
       if (drawing) {
-      //  __display("[gpu::span_drawer] span %d->%d (texid:%d)",col_start,col_end,tex_id);
+        __display("[gpu::span_drawer] span %d->%d (texid:%d)",col_start,col_end,tex_id);
       }
 $$end
     } else { // ~in_start -------------------------------
@@ -587,7 +587,7 @@ $$if SIMULATION then
       if (in_start) {
         uint9 col(0);
         col = col == 319 ? 0 : (col + 1);
-        // __display("[gpu::column_sender] -------- next column (%d) --------",col);
+        __display("[gpu::column_sender] -------- next column (%d) --------",col);
       }
 $$end
 
