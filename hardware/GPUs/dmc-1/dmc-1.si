@@ -151,7 +151,7 @@ unit texture_sampler(
         tex_hp2        = txm.data[4,4];
 $$if SIMULATION then
         if (binding[0,1] & ~binding[1,1]) {
-        //  __display("[gpu::texbind] %d @%x %dx%d",smplr.tex_id,tex_addr,tex_wp2,tex_hp2);
+          __display("[gpu::texbind] %d @%x %dx%d",smplr.tex_id,tex_addr,tex_wp2,tex_hp2);
         }
 $$end
       }

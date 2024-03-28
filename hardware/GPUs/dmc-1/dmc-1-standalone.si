@@ -63,6 +63,7 @@ unit DMC_1_gpu_standalone(
   input   uint1   ram_read,
   output  uint8   ram_rdata,
   output  uint1   ram_next_byte,
+  output  uint1   ram_busy,
 ) {
 
   // ==============================
@@ -106,11 +107,16 @@ $$if MCH2022 or (SIMULATION and SIMUL_QPSRAM) or BROT then
     txm.in_ready = ram_read | txm_io.in_ready;
     txm.addr     = ram_read ? ram_addr : txm_io.addr;
 $$end
+    ram_busy     = txm.busy;
   }
 
   algorithm <autorun> {
     while (1) {
       if (ram_write) {
+        if (txm.busy) {
+          __display("[GPU] ERROR memory is busy");
+          __finish();
+        }
         uint24 waddr = ram_addr;
         // setup write
         txm.wenable  = 1;
@@ -127,7 +133,7 @@ $$end
             // ^^^^^^^^^^^ used directly as inputs are registered
             txm.wdata = wdata[56,8];
             wdata     = wdata << 8;
-            // __display("[GPU] writing %x @%x",txm.wdata,waddr + n);
+            __display("[GPU] writing %x @%x",txm.wdata,waddr + n);
             n         = n + 1;
           }
         }
