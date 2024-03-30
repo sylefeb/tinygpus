@@ -42,6 +42,7 @@ unit DMC_1_gpu_standalone(
   // command interface
   input   uint1   in_next, // pulse
   output  uint1   ready,
+  output  uint1   idle,
   input   uint64  command,
   // screen interface
   input   uint1   screen_ready,
@@ -65,6 +66,9 @@ unit DMC_1_gpu_standalone(
   output  uint1   ram_next_byte,
   output  uint1   ram_busy,
 ) {
+$$if SIMULATION then
+  uint32 cycle(0);
+$$end
 
   // ==============================
   // texture memory
@@ -104,10 +108,15 @@ $$end
   always_before {
 $$if MCH2022 or (SIMULATION and SIMUL_QPSRAM) or BROT then
     txm.wenable  = 0;
+$$end
     txm.in_ready = ram_read | txm_io.in_ready;
     txm.addr     = ram_read ? ram_addr : txm_io.addr;
-$$end
     ram_busy     = txm.busy;
+$$if SIMULATION then
+    if (ram_read) {
+      //__display("[GPU] reading @%x (cycle %d)",ram_addr,cycle);
+    }
+$$end
   }
 
   algorithm <autorun> {
@@ -133,7 +142,9 @@ $$end
             // ^^^^^^^^^^^ used directly as inputs are registered
             txm.wdata = wdata[56,8];
             wdata     = wdata << 8;
-            __display("[GPU] writing %x @%x",txm.wdata,waddr + n);
+$$if SIMULATION then
+            //__display("[GPU] writing %x @%x (cycle %d)",txm.wdata,waddr + n,cycle);
+$$end
             n         = n + 1;
           }
         }
@@ -151,6 +162,9 @@ $$end
     // ram read
     ram_rdata     = txm.rdata;
     ram_next_byte = txm_io.data_available;
+$$if SIMULATION then
+    cycle = cycle + 1;
+$$end
   }
 
 }

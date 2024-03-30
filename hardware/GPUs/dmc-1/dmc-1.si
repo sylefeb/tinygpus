@@ -100,6 +100,9 @@ unit texture_sampler(
   sampler2D_provider smplr,  // texture sampler interface
   texmem_user        txm,    // texture memory interface
 ) {
+$$if SIMULATION then
+  uint32 cycle(0);
+$$end
   uint13 tbl_addr <:: {smplr.tex_id,3b000}; // texture record address (8 bytes)
   uint5  binding(0);    // reads 4 bytes on binding (addrx3 whx1)
   uint24 tex_addr(0);   // base texture address
@@ -142,16 +145,16 @@ unit texture_sampler(
       if (txm.data_available) {
         // store result
         switch (binding[1,3]) {
-          case 3b111: { tex_addr[ 0,8] = txm.data; }
-          case 3b011: { tex_addr[ 8,8] = txm.data; }
-          case 3b001: { tex_addr[16,8] = txm.data; }
+          case 3b111: { tex_addr[ 0,8] = txm.data;  }
+          case 3b011: { tex_addr[ 8,8] = txm.data;  }
+          case 3b001: { tex_addr[16,8] = txm.data;  }
           default: { }
         }
         tex_wp2        = txm.data[0,4]; // written last, so no condition
         tex_hp2        = txm.data[4,4];
 $$if SIMULATION then
         if (binding[0,1] & ~binding[1,1]) {
-          __display("[gpu::texbind] %d @%x %dx%d",smplr.tex_id,tex_addr,tex_wp2,tex_hp2);
+          // __display("[gpu::texbind] %d @%x %dx%d (cycle %d)",smplr.tex_id,tex_addr,tex_wp2,tex_hp2,cycle);
         }
 $$end
       }
@@ -159,7 +162,15 @@ $$end
       // fetch next sample
       txm.addr       = fetch_addr;
       txm.in_ready   = fetch_next;
+$$if SIMULATION then
+        //if (fetch_addr) {
+        //  __display("[gpu::fetch] @%x (texid:%d)",fetch_addr,smplr.tex_id);
+        //}
+$$end
     }
+$$if SIMULATION then
+    cycle = cycle + 1;
+$$end
   }
 }
 
@@ -469,7 +480,7 @@ $$end
       pickh_done         = 0; // picking done
 $$if SIMULATION then
       if (drawing) {
-        __display("[gpu::span_drawer] span %d->%d (texid:%d)",col_start,col_end,tex_id);
+        // __display("[gpu::span_drawer] span %d->%d (texid:%d)",col_start,col_end,tex_id);
       }
 $$end
     } else { // ~in_start -------------------------------
@@ -641,7 +652,8 @@ $$end
 
 unit DMC_1_gpu(
   input   uint1       in_next, // pulse
-  output  uint1       ready,
+  output  uint1       ready,   // high when ready for a next command
+  output  uint1       idle,    // high when the GPU has nothing to do anymore
   input   uint64      command,
   input   uint1       screen_ready,
   output! uint1       screen_valid(0),
@@ -736,7 +748,9 @@ $$end
     }
 
     // not ready while next command is pending
-    ready        = ~next_pending;
+    ready = ~next_pending;
+    // not idle when next command is pending or drawer/sender are busy
+    idle  = ~( next_pending | drawer.busy | sender.busy );
     // which buffer to draw to and which to send to the screen
     drawer.buffer =  draw_buffer;
     sender.buffer = ~draw_buffer;
