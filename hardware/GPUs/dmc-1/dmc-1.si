@@ -653,7 +653,7 @@ $$end
 unit DMC_1_gpu(
   input   uint1       in_next, // pulse
   output  uint1       ready,   // high when ready for a next command
-  output  uint1       idle,    // high when the GPU has nothing to do anymore
+  output  uint1       idle,    // high when the GPU is no longer using RAM
   input   uint64      command,
   input   uint1       screen_ready,
   output! uint1       screen_valid(0),
@@ -749,8 +749,8 @@ $$end
 
     // not ready while next command is pending
     ready = ~next_pending;
-    // not idle when next command is pending or drawer/sender are busy
-    idle  = ~( next_pending | drawer.busy | sender.busy );
+    // not idle when next command is pending and drawer is busy
+    idle  = ~( next_pending | drawer.busy );
     // which buffer to draw to and which to send to the screen
     drawer.buffer =  draw_buffer;
     sender.buffer = ~draw_buffer;
