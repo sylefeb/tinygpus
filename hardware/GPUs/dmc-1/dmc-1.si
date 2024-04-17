@@ -18,8 +18,12 @@
 // |___________________________________________________________________________|
 
 // screen configuration
+$$if not doomchip_width then
 $$doomchip_width     = 320
+$$end
+$$if not doomchip_height then
 $$doomchip_height    = 240
+$$end
 $$doomchip_height_p2 = 8
 
 $$config['simple_dualport_bram_wmask_half_bytes_wenable1_width'] = 'data'
@@ -572,7 +576,12 @@ unit column_sender(
   output! uint16              screen_data,
   output  uint1               busy(1),
 ) {
+$$if not DMC1_NO_PALETTE then
   brom uint18 palette[256] = {$palette666$};
+  $$end_count = doomchip_height+1
+$$else
+  $$end_count = doomchip_height
+$$end
 
   uint8  count(0);
   uint1  active(0);
@@ -590,7 +599,7 @@ unit column_sender(
       count         = in_start ? 0 : ((hold | ~active) ? count : count + 1);
       //                                      ^^^^^^ not necessary, helps debug
       active        = in_start                               ? 1 // first
-                    : (count == 8d$doomchip_height+1$) ? 0 // done
+                    : (count == 8d$end_count$) ? 0 // done
                     : active;
       colbufs.addr0 = { buffer, count[0,$doomchip_height_p2$] };
 
@@ -601,6 +610,8 @@ $$if SIMULATION then
         __display("[gpu::column_sender] -------- next column (%d) --------",col);
       }
 $$end
+
+$$if not DMC1_NO_PALETTE then
 
     } -> { // stage 1
 
@@ -628,7 +639,9 @@ $$end
       //  multipliers so that Yosys does not try to use DSPs: there are no more
       //  available and synthesis would fail!
       r  = ro >> 8;       g  = go >> 8;       b  = bo >> 8;
+
     } -> { // stage 3
+
       screen_valid  = active;
       hold         ^= active & ~screen_ready;
       //          ^^^^ other stages see this immediately
@@ -644,6 +657,20 @@ $$else
       screen_data   =  {g[0,3],b[1,5],r[1,5],g[3,3]};
 $$end
     }
+
+$$else
+
+    } -> { // stage 1
+
+      screen_valid  = active;
+      hold         ^= active & ~screen_ready;
+      //          ^^^^ other stages see this immediately
+      busy          = active;
+      screen_data   = colbufs.rdata0;
+
+    }
+
+$$end
   }
 }
 

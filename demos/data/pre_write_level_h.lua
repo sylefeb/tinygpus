@@ -342,7 +342,7 @@ out:write('};\n')
 --       storing only for sprites (contiguous from first index)
 first_sprite_index = -1
 out:write('const unsigned char sprtdims[] = {\n')
-for i = 1,terrain_texture_id-1 do
+for i = 1,num_textures do
   if id_to_texture[i] then
     if first_sprite_index < 0 and texture_ids[id_to_texture[i]].type == 'sprite' then
       first_sprite_index = i

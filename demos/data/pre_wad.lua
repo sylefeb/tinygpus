@@ -299,13 +299,16 @@ print('palette file is ' .. sz .. ' bytes')
 palette={}
 inv_palette={}
 palette_666={}
+palette_565={}
 for c=1,256 do
   local r    = string.unpack('B',in_pal:read(1))
   local g    = string.unpack('B',in_pal:read(1))
   local b    = string.unpack('B',in_pal:read(1))
   local rgb     = r + (g*256) + (b*256*256)
   local rgb_666 = (b>>2) + (g>>2)*64 + (r>>2)*64*64
+  local rgb_565 = ((b >> 3) << 11) | ((g >> 2) << 5) | (r >> 3)
   palette_666[c] = rgb_666
+  palette_565[c] = ((rgb_565&255)<<8) | (rgb_565>>8)
   palette[c] = rgb
   inv_palette[rgb] = c
 end
@@ -316,6 +319,11 @@ local out = assert(io.open(path .. '../build/palette666.si', "w"))
 out:write('$$palette666 = \'')
 for c=1,256 do
   out:write(palette_666[c] .. ',')
+end
+out:write('\'\n')
+out:write('$$palette565 = \'')
+for c=1,256 do
+  out:write(palette_565[c] .. ',')
 end
 out:write('\'\n')
 out:close()
