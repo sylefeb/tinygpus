@@ -316,14 +316,24 @@ in_pal:close()
 
 -- write palette for design
 local out = assert(io.open(path .. '../build/palette666.si', "w"))
+-- rgb 666 palette
 out:write('$$palette666 = \'')
 for c=1,256 do
   out:write(palette_666[c] .. ',')
 end
 out:write('\'\n')
+-- rgb 565 palette
 out:write('$$palette565 = \'')
 for c=1,256 do
   out:write(palette_565[c] .. ',')
+end
+out:write('\'\n')
+-- colormaps
+out:write('$$colormap8 = \'')
+for i=1,32,4 do
+  for c=1,256 do
+    out:write(colormaps[i][c] .. ',')
+  end
 end
 out:write('\'\n')
 out:close()
