@@ -332,7 +332,7 @@ out:write('\'\n')
 out:write('$$colormap8 = \'')
 for i=1,32,4 do
   for c=1,256 do
-    out:write(colormaps[i][c] .. ',')
+    out:write(colormaps[1+32-i][c] .. ',')
   end
 end
 out:write('\'\n')
