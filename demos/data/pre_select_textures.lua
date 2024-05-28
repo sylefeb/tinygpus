@@ -44,8 +44,7 @@ print('num walls  : ' .. #textures_names)
 print('num flats  : ' .. #lumps_flats)
 print('num sprites: ' .. #lumps_sprites)
 
-
---[[
+if true then
 
 -- -------------------------------------
 -- add textures for the terrain
@@ -88,4 +87,4 @@ num_textures       = num_textures + 1
 texture_ids[t]     = {id=num_textures,type='terrain',used=1}
 terrain_texture_id = num_textures
 
-]]
+end

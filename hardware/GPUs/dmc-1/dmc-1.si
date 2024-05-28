@@ -141,6 +141,7 @@ $$end
     // we always write a result, but it is incorrect during binding and access
     // caller has to wait the expected number of cycles so the value is correct
     smplr.texel   = smplr.tex_id == 0 ? $bkg_pal_idx$ : txm.data;
+    //              ^^^^^ FIXME TODO why not a constant color texture?
     // bind or fetch?
     if (binding[0,1]) { // ---- binding
       // record address
@@ -158,7 +159,7 @@ $$end
         tex_hp2        = txm.data[4,4];
 $$if SIMULATION then
         if (binding[0,1] & ~binding[1,1]) {
-          // __display("[gpu::texbind] %d @%x %dx%d (cycle %d)",smplr.tex_id,tex_addr,tex_wp2,tex_hp2,cycle);
+          __display("[gpu::texbind] %d @%x %dx%d (cycle %d)",smplr.tex_id,tex_addr,tex_wp2,tex_hp2,cycle);
         }
 $$end
       }
@@ -167,9 +168,9 @@ $$end
       txm.addr       = fetch_addr;
       txm.in_ready   = fetch_next;
 $$if SIMULATION then
-        //if (fetch_addr) {
-        //  __display("[gpu::fetch] @%x (texid:%d)",fetch_addr,smplr.tex_id);
-        //}
+        if (fetch_next) {
+          __display("[gpu::fetch] @%x u:%d v:%d (texid:%d)",fetch_addr,u,v,smplr.tex_id);
+        }
 $$end
     }
 $$if SIMULATION then
@@ -396,10 +397,10 @@ $$end
       sameas(current) pixcoord = current;
       colbufs.addr1       = { buffer,pixcoord[0,$doomchip_height_p2$] };
       colbufs.wdata1      = ~lmapmode //                        vvv pad low bits if light
-    ? { {(light[4,1] ? 4b0 : light[0,4]) | (bkg ? 4d15 : 4d0) , 4b0}, sampler_io.texel }
-    //   ^^^^^^^^^^^ sign, clamp to 0       ^^^ bckg always lit
-    : { sampler_io.texel, 8b0 };
-    //   ^^^^^^^^^^^ write to light
+      ? { {(light[4,1] ? 4b0 : light[0,4]) | (bkg ? 4d15 : 4d0) , 4b0}, sampler_io.texel }
+      //   ^^^^^^^^^^^ sign, clamp to 0       ^^^ bckg always lit
+      : { sampler_io.texel, 8b0 };
+      //   ^^^^^^^^^^^ write to light
       colbufs.wenable1    = {4{smplr_delay[$delay_bit$,1] & depth_ok & opaque}}
                           & {2b11,~lmapmode,~lmapmode};
       // ---- read/write to depth buffer
@@ -408,6 +409,9 @@ $$end
       depths.wdata1       = { buffer,dist };
       depths.wenable1     = smplr_delay[$delay_bit$,1] & depth_ok & opaque;
       // NOTE:              ^^ next sample is ready, we write result from previous
+      if (|colbufs.wenable1) {
+        __display("[gpu::write] pixcoord:%d",pixcoord);
+      }
     }
 
     // ---- texture sampler access
@@ -484,21 +488,25 @@ $$end
       pickh_done         = 0; // picking done
 $$if SIMULATION then
       if (drawing) {
-        // __display("[gpu::span_drawer] span %d->%d (texid:%d)",col_start,col_end,tex_id);
+        __display("[gpu::span_drawer] span %d->%d (texid:%d)",col_start,col_end,tex_id);
       }
 $$end
     } else { // ~in_start -------------------------------
+
+      // ---- start fetching next sample: one cycle before the sampler is done
+      //      so we maximize texture memory throughput, leaving no gap   vv
+  		sampler_io.do_fetch = ~bkg & /*still_drawing &*/ smplr_delay[$delay_bit-1$,1];
+      //                    ^^^^ no fetch when drawing background
+
+      if (sampler_io.do_fetch) {
+        __display("[gpu::do_fetch]");
+      }
 
 			uint1 still_drawing = terrain ? ~terrain_done
                                     : (~current_done | skip[0,1]);
       //                               ^^^^^^^^^^^^    ^^^^^^^^^
       //        still drawing if current not done or we are warming the pipeline
       //        this condition (skip[0,1]) is important for 1-pixel spans
-
-      // ---- start fetching next sample: one cycle before the sampler is done
-      //      so we maximize texture memory throughput, leaving no gap
-  		sampler_io.do_fetch = ~bkg & still_drawing & smplr_delay[$delay_bit-1$,1];
-      //                    ^^^^ no fetch when drawing background
 
       // ---- a texture sample is available
       //      this happens on the next (and final) cycle of the orchestration
@@ -528,8 +536,9 @@ $$end
 					tcol_dist         = next_tcol_rdy ? (tcol_dist + terrain_step) : tcol_dist;
 					// increment current
 					current      = (current_done | skip[0,1]) ? current : (current + 1       );
-					tc_v         = skip[0,1] ? tc_v : (tc_v    + tc_v_inc);
-          wc_v         = wc_v    + wc_v_inc;
+					tc_v         = skip[0,1] ? tc_v : (tc_v + tc_v_inc);
+          wc_v         = skip[0,1] ? wc_v : (wc_v + wc_v_inc);
+          __display("[gpu::wc_v] %d (current:%d)",wc_v>>11,current);
           dot_ray      = dot_ray + ny_inc;
           dot_u        = dot_u   + uy_inc;
           dot_v        = dot_v   + vy_inc;
@@ -777,7 +786,7 @@ $$end
     // not ready while next command is pending
     ready = ~next_pending;
     // not idle when next command is pending and drawer is busy
-    idle  = ~( next_pending | drawer.busy );
+    idle  = ~( next_pending | drawer.busy);
     // which buffer to draw to and which to send to the screen
     drawer.buffer =  draw_buffer;
     sender.buffer = ~draw_buffer;
