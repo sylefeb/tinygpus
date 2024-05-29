@@ -159,7 +159,7 @@ $$end
         tex_hp2        = txm.data[4,4];
 $$if SIMULATION then
         if (binding[0,1] & ~binding[1,1]) {
-          __display("[gpu::texbind] %d @%x %dx%d (cycle %d)",smplr.tex_id,tex_addr,tex_wp2,tex_hp2,cycle);
+          // __display("[gpu::texbind] %d @%x %dx%d (cycle %d)",smplr.tex_id,tex_addr,tex_wp2,tex_hp2,cycle);
         }
 $$end
       }
@@ -169,7 +169,7 @@ $$end
       txm.in_ready   = fetch_next;
 $$if SIMULATION then
         if (fetch_next) {
-          __display("[gpu::fetch] @%x u:%d v:%d (texid:%d)",fetch_addr,u,v,smplr.tex_id);
+          // __display("[gpu::fetch %d] @%x u:%d v:%d (texid:%d)",cycle,fetch_addr,u,v,smplr.tex_id);
         }
 $$end
     }
@@ -285,7 +285,7 @@ $$end
 
   // ---- orchestration
 $$if MCH2022 or (SIMULATION and SIMUL_QPSRAM) or BROT then
-  $$delay_bit = 14
+  $$delay_bit = 15
 $$else
   $$delay_bit = 9
 $$end
@@ -300,7 +300,7 @@ $$end
   // - only one of wall, plane, terrain is 1
 $$if MCH2022 or (SIMULATION and SIMUL_QPSRAM) or BROT then
   // fetch is 12 cycles  NOTE: could be shorter? was 10 on earlier controller
-  $$ smplr_seq_init       = '{10b0,plane|wall,1b0,1b0,terrain}'
+  $$ smplr_seq_init       = '{11b0,plane|wall,1b0,1b0,terrain}'
   //                               ^^^^ plane and wall go as fast as texlkup
   //                                                  ^^^ terrain needs +3 cyles
   $$ smplr_seq_init_start = smplr_seq_init
@@ -310,6 +310,10 @@ $$else
   //                              ^^^^ plane and wall go as fast as texlkup
   //                                                 ^^^ terrain needs +3 cyles
   $$ smplr_seq_init_start = smplr_seq_init
+$$end
+
+$$if SIMULATION then
+  uint32 cycle(0);
 $$end
 
   always {
@@ -409,9 +413,7 @@ $$end
       depths.wdata1       = { buffer,dist };
       depths.wenable1     = smplr_delay[$delay_bit$,1] & depth_ok & opaque;
       // NOTE:              ^^ next sample is ready, we write result from previous
-      if (|colbufs.wenable1) {
-        __display("[gpu::write] pixcoord:%d",pixcoord);
-      }
+      // if (|colbufs.wenable1) { __display("[gpu::write %d] pixcoord:%d texel:%d",cycle,pixcoord,sampler_io.texel); }
     }
 
     // ---- texture sampler access
@@ -488,19 +490,17 @@ $$end
       pickh_done         = 0; // picking done
 $$if SIMULATION then
       if (drawing) {
-        __display("[gpu::span_drawer] span %d->%d (texid:%d)",col_start,col_end,tex_id);
+        // __display("[gpu::span_drawer] span %d->%d (texid:%d)",col_start,col_end,tex_id);
       }
 $$end
     } else { // ~in_start -------------------------------
 
       // ---- start fetching next sample: one cycle before the sampler is done
-      //      so we maximize texture memory throughput, leaving no gap   vv
-  		sampler_io.do_fetch = ~bkg & /*still_drawing &*/ smplr_delay[$delay_bit-1$,1];
+      //      so we maximize texture memory throughput  vvv  leaving no gap
+      sampler_io.do_fetch = ~bkg & smplr_delay[$delay_bit-1$,1];
       //                    ^^^^ no fetch when drawing background
 
-      if (sampler_io.do_fetch) {
-        __display("[gpu::do_fetch]");
-      }
+      // if (sampler_io.do_fetch) { __display("[gpu::do_fetch]"); }
 
 			uint1 still_drawing = terrain ? ~terrain_done
                                     : (~current_done | skip[0,1]);
@@ -537,8 +537,8 @@ $$end
 					// increment current
 					current      = (current_done | skip[0,1]) ? current : (current + 1       );
 					tc_v         = skip[0,1] ? tc_v : (tc_v + tc_v_inc);
-          wc_v         = skip[0,1] ? wc_v : (wc_v + wc_v_inc);
-          __display("[gpu::wc_v] %d (current:%d)",wc_v>>11,current);
+          wc_v         = skip[1,1] ? wc_v : (wc_v + wc_v_inc);
+          // __display("[gpu::wc_v] %d (current:%d)",wc_v>>11,current);
           dot_ray      = dot_ray + ny_inc;
           dot_u        = dot_u   + uy_inc;
           dot_v        = dot_v   + vy_inc;
@@ -565,6 +565,10 @@ $$end
 
     busy         = drawing | ~sampler_io.ready;
     //                        ^^^^^ binding in progress
+
+$$if SIMULATION then
+    cycle = cycle + 1;
+$$end
 
   }
 
