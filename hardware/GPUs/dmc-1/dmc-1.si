@@ -159,7 +159,7 @@ $$end
         tex_hp2        = txm.data[4,4];
 $$if SIMULATION then
         if (binding[0,1] & ~binding[1,1]) {
-          // __display("[gpu::texbind] %d @%x %dx%d (cycle %d)",smplr.tex_id,tex_addr,tex_wp2,tex_hp2,cycle);
+          __display("[gpu::texbind] %d @%x %dx%d (cycle %d)",smplr.tex_id,tex_addr,tex_wp2,tex_hp2,cycle);
         }
 $$end
       }
@@ -169,7 +169,7 @@ $$end
       txm.in_ready   = fetch_next;
 $$if SIMULATION then
         if (fetch_next) {
-          // __display("[gpu::fetch %d] @%x u:%d v:%d (texid:%d)",cycle,fetch_addr,u,v,smplr.tex_id);
+          __display("[gpu::fetch %d] @%x u:%d v:%d (texid:%d)",cycle,fetch_addr,u,v,smplr.tex_id);
         }
 $$end
     }
@@ -490,14 +490,14 @@ $$end
       pickh_done         = 0; // picking done
 $$if SIMULATION then
       if (drawing) {
-        // __display("[gpu::span_drawer] span %d->%d (texid:%d)",col_start,col_end,tex_id);
+        __display("[gpu::span_drawer] span %d->%d (texid:%d)",col_start,col_end,tex_id);
       }
 $$end
     } else { // ~in_start -------------------------------
 
       // ---- start fetching next sample: one cycle before the sampler is done
       //      so we maximize texture memory throughput  vvv  leaving no gap
-      sampler_io.do_fetch = ~bkg & smplr_delay[$delay_bit-1$,1];
+      sampler_io.do_fetch = ~bkg & smplr_delay[$delay_bit-1$,1] & ~current_done;
       //                    ^^^^ no fetch when drawing background
 
       // if (sampler_io.do_fetch) { __display("[gpu::do_fetch]"); }
@@ -538,7 +538,7 @@ $$end
 					current      = (current_done | skip[0,1]) ? current : (current + 1       );
 					tc_v         = skip[0,1] ? tc_v : (tc_v + tc_v_inc);
           wc_v         = skip[1,1] ? wc_v : (wc_v + wc_v_inc);
-          // __display("[gpu::wc_v] %d (current:%d)",wc_v>>11,current);
+          __display("[gpu::wc_v] %d (current:%d)",wc_v>>11,current);
           dot_ray      = dot_ray + ny_inc;
           dot_u        = dot_u   + uy_inc;
           dot_v        = dot_v   + vy_inc;
