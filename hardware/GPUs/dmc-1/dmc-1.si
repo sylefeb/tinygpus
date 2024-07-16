@@ -378,7 +378,7 @@ $$end
         c     = {24{1b0}};
       }
       case 17: {
-        tr_u  = (__signed(result >>> 2) + __signed(u_offset));
+        tr_u  = ((result >>> 2) + __signed(u_offset));
         a     = terrain_dist;
         b     = __signed(sinray);
         c     = {24{1b0}};
