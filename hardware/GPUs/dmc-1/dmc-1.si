@@ -217,9 +217,10 @@ $$end
   };
   // ---- decode incoming draw call
   // column span start and end
-  uint8  col_start <: in_command[10,8];
-  uint8  col_end   <: in_command[18,8] > 8d$doomchip_height-1$
+  uint8  col_end_clip <: in_command[18,8] > 8d$doomchip_height-1$ // NOTE: defer responsability to CPU?
                       ? 8d$doomchip_height-1$ : in_command[18,8];
+  uint8  col_start    <: terrain ? $doomchip_height-1$-col_end_clip     : in_command[10,8];
+  uint8  col_end      <: terrain ? $doomchip_height-1$-in_command[10,8] : col_end_clip;
   // draw command type
   uint1  wall     <:: in_command[30,2] == 2b00;   // wall?
   uint1  plane    <:: in_command[30,2] == 2b01;   // plane? (perspective span)
@@ -265,6 +266,7 @@ $$end
   uint11 terrain_dist <:: tcol_rdy ? tcol_dist[8,11] : tc_v[8,11];
   uint1  terrain_done <:: (tcol_dist[8,11] > in_command[32,11])
                         | (tcol_dist[$8+11$,1]); // max distance reached (2048)
+                        // FIXME: add col_end reached?
   uint24 scrd_inc <:: ((tcol_dist[8,11] - prev_tcol_dist[8,11]) * inv_y.rdata) >> 8;
   //     ^^^^^^^^ when drawing a terrain span, per-screen pixel increment
   // ray cosine/sine
@@ -398,7 +400,7 @@ $$end
 
     {
       // ---- output to color buffer
-      sameas(current) pixcoord = current;
+      sameas(current) pixcoord = terrain ? $doomchip_height-1$-current : current;
       colbufs.addr1       = { buffer,pixcoord[0,$doomchip_height_p2$] };
       colbufs.wdata1      = ~lmapmode //                        vvv pad low bits if light
       ? { {(light[4,1] ? 4b0 : light[0,4]) | (bkg ? 4d15 : 4d0) , 4b0}, sampler_io.texel }
@@ -519,9 +521,9 @@ $$end
 					// next column height has been computed, start next terrain span
 					int16 scrh     = (result>>>8) + 16d$doomchip_height//2$;
 					uint8 end_next = scrh[15,1] ? 8b0 : (scrh < col_end ? scrh[0,8] : col_end);
-					scrh_diff = end_next - current;
-					tcol_rdy  = 0;
-					tc_v      = prev_tcol_dist;   // TODO add based on (current - end)
+					scrh_diff  = end_next - current;
+					tcol_rdy   = 0;
+					tc_v       = prev_tcol_dist;   // TODO add based on (current - end)
 					end        = end_next;
 					pickedh    = pickh & ~pickh_done ? sampler_io.texel : pickedh;
 					pickh_done = 1;
