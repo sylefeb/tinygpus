@@ -898,6 +898,7 @@ static inline void draw_columns()
           int y_low      = y>>3;
           // hit point
           int hit_dist   = mul(y_low,inv_sw);
+//printf("hit dist %d\n,hit_dist\n",hit_dist);
           int hit_x      = view_x + (mul(ray_dx,y_low) >> FPm);
           int hit_y      = view_y + (mul(ray_dy,y_low) >> FPm);
           // sector light

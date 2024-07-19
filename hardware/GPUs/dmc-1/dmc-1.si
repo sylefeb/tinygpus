@@ -501,7 +501,7 @@ $$end
       //      so we maximize texture memory throughput  vvv  leaving no gap
       sampler_io.do_fetch = ~bkg // no fetch when drawing background
                           & smplr_delay[$delay_bit-1$,1]
-                          & (~current_done | terrain);
+                          & (~current_done | (terrain & ~terrain_done));
 
       // if (sampler_io.do_fetch) { __display("[gpu::do_fetch]"); }
 
