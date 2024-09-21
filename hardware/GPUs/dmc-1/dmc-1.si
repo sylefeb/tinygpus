@@ -260,12 +260,12 @@ $$end
   // ---- terrain
   int16  view_z(0);         // view elevation
   uint1  tcol_rdy(0);       // a terrain column is ready (projected height)
-  int24  tcol_dist(0);      // terrain column dist from view
+  uint24 tcol_dist(0);      // terrain column dist from view
   uint24 prev_tcol_dist(0); // previous terrain column dist from view
   uint8  scrh_diff(0); // when drawing a terrain span, diff btw 'end-prev. end'
   uint11 terrain_dist <:: tcol_rdy ? tcol_dist[8,11] : tc_v[8,11];
-  uint1  terrain_done <:: (tcol_dist[8,11] > in_command[32,11])
-                        | (tcol_dist[$8+11$,1]); // max distance reached (2048)
+  uint1  terrain_done <:: (tcol_dist[8,15] > in_command[32,15]) // end dist?
+                        | (tcol_dist[$8+11$,1]); // max distance reached
                         // FIXME: add col_end reached?
   uint24 scrd_inc <:: ((tcol_dist[8,11] - prev_tcol_dist[8,11]) * inv_y.rdata) >> 8;
   //     ^^^^^^^^ when drawing a terrain span, per-screen pixel increment
@@ -480,8 +480,8 @@ $$end
       // terrains
       tc_v               = __signed({in_command[48,11], 8b0});
       // terrain, init column distance
-      tcol_dist          = __signed({in_command[48,11],8b0});
-      prev_tcol_dist     = __signed({in_command[48,11],8b0});
+      tcol_dist          = __signed({in_command[48,15],8b0});
+      prev_tcol_dist     = __signed({in_command[48,15],8b0});
       // start drawing
       drawing            = ~param; // if not param, we start drawing
       start              = ~param;
