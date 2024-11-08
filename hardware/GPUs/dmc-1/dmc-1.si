@@ -443,8 +443,8 @@ $$end
 
     if (in_start) {
       // texture id on bindings
-      uint10 tex_id     = in_command[0,10];
-      uint1  bkg_tex_id = tex_id == 0; // is the incoming texid the background?
+      uint10 tex_id      = in_command[0,10];
+      uint1  bkg_tex_id  = tex_id == 0; // is the incoming texid the background?
       // span init
       end                = terrain ? col_start : col_end;
       current            = col_start;
@@ -457,9 +457,9 @@ $$end
       u_offset           = set_offsets ? __signed(in_command[ 1,24]) : u_offset;
       v_offset           = set_offsets ? __signed(in_command[32,24]) : v_offset;
       // lightmap mode enable
-      lmapmode           = uv_offs?  in_command[25, 1] : lmapmode;
+      lmapmode           = uv_offs & in_command[29, 1] ?  in_command[25, 1] : lmapmode;
       // depth test enable
-      depthtest          = uv_offs? ~in_command[26, 1] : depthtest;
+      depthtest          = uv_offs & in_command[29, 1] ? ~in_command[26, 1] : depthtest;
       // view_z
       view_z             = set_vwz? __signed(in_command[32,16]) : view_z;
       // plane span data
@@ -492,7 +492,7 @@ $$end
       pickh_done         = 0; // picking done
 $$if SIMULATION then
       if (drawing) {
-        // __display("[gpu::span_drawer] span %d->%d (texid:%d)",col_start,col_end,tex_id);
+        __display("[gpu::span_drawer] span %d->%d (texid:%d)",col_start,col_end,tex_id);
       }
 $$end
     } else { // ~in_start -------------------------------
