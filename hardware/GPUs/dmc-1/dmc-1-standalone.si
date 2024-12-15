@@ -13,7 +13,9 @@
 
 $include("dmc-1.si")
 
-$$if MCH2022 or (SIMULATION and SIMUL_QPSRAM) or BROT then
+$$if MUSBX then
+  $include('../../common/qpsram2x_esp64.si')
+$$elseif MCH2022 or (SIMULATION and SIMUL_QPSRAM) or BROT then
   $include('../../common/qpsram2x.si')
 $$else
   $include('../../common/spiflash2x.si')
@@ -72,7 +74,7 @@ $$end
 
   // ==============================
   // texture memory
-$$if MCH2022 or (SIMULATION and SIMUL_QPSRAM) or BROT then
+$$if MCH2022 or (SIMULATION and SIMUL_QPSRAM) or BROT or MUSBX then
   qpsram_ram txm<@clock2x,reginputs> (
     ram_clk  :> ram_clk,  ram_csn :>  ram_csn,
     ram_io0 <:> ram_io0,  ram_io1 <:> ram_io1,
@@ -88,7 +90,7 @@ $$end
   // adapts the data available pulse across clock domains
   adapterDataAvailable _<@clock2x>(
     valid            <: txm.in_ready,
-$$if MCH2022 or (SIMULATION and SIMUL_QPSRAM) or BROT then
+$$if MCH2022 or (SIMULATION and SIMUL_QPSRAM) or BROT or MUSBX then
     data_avail_pulse <: txm.data_next,
 $$else
     data_avail_pulse <: txm.rdata_available, // FIXME: update all to new controller

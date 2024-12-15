@@ -115,6 +115,10 @@ $$end
 
   uint1  fetch_next(0); // fetch on next cycle
 
+  uint1  prev_data_available(0); // tracks whether data was available prev cycle
+  uint8  prev_data(0);           // tracks data received prev cycle
+  // ^^ (delays updating binding by one cycle, reduce fmax pressure)
+
   uint11 u(0);          // u fetch coordinate
   uint11 v(0);          // v fetch coordinate
   uint24 fetch_addr(0); // fetch address (from u,v)
@@ -124,10 +128,10 @@ $$end
     uint11 modv      = ((1<<tex_hp2)-1);
     // update binding (takes multiple cycles, continues while binding[0,1] == 1)
     binding       = reset ? 0 : startbind ? 5b11111
-                              : (txm.data_available ? binding>>1 : binding);
+                              : (prev_data_available ? binding>>1 : binding);
     // memory trigger pulse high on access, and is maintained high while binding
     // (continuous read)            vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv last
-    txm.in_ready  = binding[0,1] & (~txm.data_available | binding[1,1]);
+    txm.in_ready  = binding[0,1] & (~prev_data_available | binding[1,1]);
     smplr.ready   = ~txm.in_ready; // ready to sample when not binding
     // next fetch address (not u,v are from previous cycle, see below)
     fetch_next    = smplr.do_fetch; // fetch on next cycle
@@ -147,16 +151,16 @@ $$end
       // record address
       txm.addr     = {11b00100000000,tbl_addr};
       //                   ^ texture header is at 2MB offset
-      if (txm.data_available) {
+      if (prev_data_available) {
         // store result
         switch (binding[1,3]) {
-          case 3b111: { tex_addr[ 0,8] = txm.data;  }
-          case 3b011: { tex_addr[ 8,8] = txm.data;  }
-          case 3b001: { tex_addr[16,8] = txm.data;  }
+          case 3b111: { tex_addr[ 0,8] = prev_data;  }
+          case 3b011: { tex_addr[ 8,8] = prev_data;  }
+          case 3b001: { tex_addr[16,8] = prev_data;  }
           default: { }
         }
-        tex_wp2        = txm.data[0,4]; // written last, so no condition
-        tex_hp2        = txm.data[4,4];
+        tex_wp2        = prev_data[0,4]; // written last, so no condition
+        tex_hp2        = prev_data[4,4];
 $$if SIMULATION then
         if (binding[0,1] & ~binding[1,1]) {
           // __display("[gpu::texbind] %d @%x %dx%d (cycle %d)",smplr.tex_id,tex_addr,tex_wp2,tex_hp2,cycle);
@@ -173,6 +177,8 @@ $$if SIMULATION then
         }
 $$end
     }
+    prev_data_available = txm.data_available;
+    prev_data           = txm.data;
 $$if SIMULATION then
     cycle = cycle + 1;
 $$end
