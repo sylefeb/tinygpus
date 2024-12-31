@@ -107,17 +107,25 @@ $$end
 
   uint64 wdata(0);
 
+$$if SIMULATION then
+  uint1 txm_was_busy(0);
+$$end
+
   always_before {
 $$if MCH2022 or (SIMULATION and SIMUL_QPSRAM) or BROT then
     txm.wenable  = 0;
 $$end
     txm.in_ready = ram_read | txm_io.in_ready;
     txm.addr     = ram_read ? ram_addr : txm_io.addr;
-    ram_busy     = txm.busy;
+    ram_busy     = txm.busy | txm.in_ready;
 $$if SIMULATION then
     if (ram_read) {
-      //__display("[GPU] reading @%x (cycle %d)",ram_addr,cycle);
+      // __display("[GPU] reading @%x (cycle %d)",ram_addr,cycle);
     }
+    if (txm_was_busy ^ txm.busy) {
+      // __display("[GPU %d] memory busy change, now is %b",cycle,txm.busy);
+    }
+    txm_was_busy = txm.busy;
 $$end
   }
 

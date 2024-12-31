@@ -498,7 +498,7 @@ $$end
       pickh_done         = 0; // picking done
 $$if SIMULATION then
       if (drawing) {
-        __display("[gpu::span_drawer] span %d->%d (texid:%d)",col_start,col_end,tex_id);
+        __display("[gpu::span_drawer %d] span %d->%d (texid:%d)",cycle,col_start,col_end,tex_id);
       }
 $$end
     } else { // ~in_start -------------------------------
@@ -508,9 +508,6 @@ $$end
       sampler_io.do_fetch = ~bkg // no fetch when drawing background
                           & smplr_delay[$delay_bit-1$,1]
                           & (~current_done | (terrain & ~terrain_done));
-
-      // if (sampler_io.do_fetch) { __display("[gpu::do_fetch]"); }
-
 			uint1 still_drawing = terrain ? ~terrain_done
                                     : (~current_done | skip[0,1]);
       //                               ^^^^^^^^^^^^    ^^^^^^^^^
@@ -571,11 +568,12 @@ $$end
       }
 
     } // in_start
-
     busy         = drawing | ~sampler_io.ready;
     //                        ^^^^^ binding in progress
 
 $$if SIMULATION then
+    //if (sampler_io.do_fetch) { __display("[gpu::do_fetch] cycle %d",cycle); }
+    if (sampler_io.do_bind)  { __display("[gpu::do_bind ] cycle %d",cycle); }
     cycle = cycle + 1;
 $$end
 
@@ -799,7 +797,7 @@ $$end
     // not ready while next command is pending
     ready = ~next_pending;
     // not idle when next command is pending and drawer is busy
-    idle  = ~( next_pending | drawer.busy);
+    idle  = ~( next_pending | drawer.busy );
     // which buffer to draw to and which to send to the screen
     drawer.buffer =  draw_buffer;
     sender.buffer = ~draw_buffer;
