@@ -700,7 +700,7 @@ $$end
 unit DMC_1_gpu(
   input   uint1       in_next, // pulse
   output  uint1       ready,   // high when ready for a next command
-  output  uint1       idle,    // high when the GPU is no longer using RAM
+  output  uint1       idle,    // high when the GPU is no longer rendering
   input   uint64      command,
   input   uint1       screen_ready,
   output! uint1       screen_valid(0),
@@ -739,6 +739,7 @@ $$end
 
   uint64 next_command(0);
   uint1  next_pending(0);
+  uint2  doing_draw(0);
 
   always {
 
@@ -749,6 +750,7 @@ $$end
 
       next_command = command;
       next_pending = 1;
+      idle         = 0; // not idle when command is pending
 
     } else { // send next command asap
 
@@ -767,8 +769,11 @@ $$end
       // sender command
       draw_buffer       = do_send ^ draw_buffer;
       sender.in_start   = do_send;
-      // did we do anything?
+      // did we consume the command?       vvvvvvvvvvvvvvvvv yes
       next_pending      = next_pending & ~(do_draw | do_send);
+      // not idle when next command is pending and drawer is busy
+      doing_draw = do_draw ? 2b11 : {1b0,doing_draw[1,1]};
+      idle       = ~( next_pending | drawer.busy /* | doing_draw[0,1]*/ );
 $$if SIMULATION then
       if (drawer.busy | sender.busy | do_draw | do_send) {
         cycle_in_commands = cycle_in_commands + 1;
@@ -796,8 +801,6 @@ $$end
 
     // not ready while next command is pending
     ready = ~next_pending;
-    // not idle when next command is pending and drawer is busy
-    idle  = ~( next_pending | drawer.busy );
     // which buffer to draw to and which to send to the screen
     drawer.buffer =  draw_buffer;
     sender.buffer = ~draw_buffer;
