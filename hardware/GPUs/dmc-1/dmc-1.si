@@ -106,6 +106,7 @@ unit texture_sampler(
 ) {
 $$if SIMULATION then
   uint32 cycle(0);
+  uint1 txm_was_in_ready(0);
 $$end
   uint13 tbl_addr <:: {smplr.tex_id,3b000}; // texture record address (8 bytes)
   uint5  binding(0);    // reads 4 bytes on binding (addrx3 whx1)
@@ -132,6 +133,11 @@ $$end
     // memory trigger pulse high on access, and is maintained high while binding
     // (continuous read)            vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv last
     txm.in_ready  = binding[0,1] & (~prev_data_available | binding[1,1]);
+$$if SIMULATION then
+    if (binding[0,1] & txm.in_ready & ~txm_was_in_ready) {
+      __display("[gpu::txm:bind %d]",cycle);
+    }
+$$end
     smplr.ready   = ~txm.in_ready; // ready to sample when not binding
     // next fetch address (not u,v are from previous cycle, see below)
     fetch_next    = smplr.do_fetch; // fetch on next cycle
@@ -144,8 +150,7 @@ $$end
     v             = smplr.v & modv;
     // we always write a result, but it is incorrect during binding and access
     // caller has to wait the expected number of cycles so the value is correct
-    smplr.texel   = smplr.tex_id == 0 ? $bkg_pal_idx$ : txm.data;
-    //              ^^^^^ FIXME TODO why not a constant color texture?
+    smplr.texel   = txm.data;
     // bind or fetch?
     if (binding[0,1]) { // ---- binding
       // record address
@@ -163,7 +168,7 @@ $$end
         tex_hp2        = prev_data[4,4];
 $$if SIMULATION then
         if (binding[0,1] & ~binding[1,1]) {
-          // __display("[gpu::texbind] %d @%x %dx%d (cycle %d)",smplr.tex_id,tex_addr,tex_wp2,tex_hp2,cycle);
+        //  __display("[gpu::texbind] %d @%x %dx%d (cycle %d)",smplr.tex_id,tex_addr,tex_wp2,tex_hp2,cycle);
         }
 $$end
       }
@@ -172,14 +177,18 @@ $$end
       txm.addr       = fetch_addr;
       txm.in_ready   = fetch_next;
 $$if SIMULATION then
+        if (txm.in_ready & ~txm_was_in_ready) {
+          __display("[gpu::txm:fetch %d]",cycle);
+        }
         if (fetch_next) {
-          // __display("[gpu::fetch %d] @%x u:%d v:%d (texid:%d)",cycle,fetch_addr,u,v,smplr.tex_id);
+        //  __display("[gpu::fetch %d] @%x u:%d v:%d (texid:%d)",cycle,fetch_addr,u,v,smplr.tex_id);
         }
 $$end
     }
     prev_data_available = txm.data_available;
     prev_data           = txm.data;
 $$if SIMULATION then
+    txm_was_in_ready = txm.in_ready;
     cycle = cycle + 1;
 $$end
   }
@@ -245,6 +254,7 @@ $$end
   uint8  current(0);     // current y pos along span
   uint8  end    (0);     // ending y value
   uint1  pickh_done(0);  // picking done
+  uint1  bkg    (0);     // whether rendering background
   uint1  current_done <:: (current >= end); // column end reached
 
   // ---- render state
@@ -343,7 +353,6 @@ $$end
                          - __signed({1b0,obscure_clmp[0,4]}));
     // opactiy test
     uint1 opaque     = ~tcol_rdy & ~skip[0,1] & ((sampler_io.texel != 255) | lmapmode);
-    uint1 bkg        = sampler_io.tex_id == 0; // in background
     // final tex coords for walls
     uint8 wc_u_8     = (wc_u     );
     uint8 wc_v_8     = (wc_v >>11); // NOTE: has to match init
@@ -409,8 +418,9 @@ $$end
       sameas(current) pixcoord = terrain ? $doomchip_height-1$-current : current;
       colbufs.addr1       = { buffer,pixcoord[0,$doomchip_height_p2$] };
       colbufs.wdata1      = ~lmapmode //                        vvv pad low bits if light
-      ? { {(light[4,1] ? 4b0 : light[0,4]) | (bkg ? 4d15 : 4d0) , 4b0}, sampler_io.texel }
+      ? { {(light[4,1] ? 4b0 : light[0,4]) | (bkg ? 4d15 : 4d0) , 4b0},
       //   ^^^^^^^^^^^ sign, clamp to 0       ^^^ bckg always lit
+           bkg ? 8d$bkg_pal_idx$ : sampler_io.texel }
       : { sampler_io.texel, 8b0 };
       //   ^^^^^^^^^^^ write to light
       colbufs.wenable1    = {4{smplr_delay[$delay_bit$,1] & depth_ok & opaque}}
@@ -422,6 +432,7 @@ $$end
       depths.wenable1     = smplr_delay[$delay_bit$,1] & depth_ok & opaque;
       // NOTE:              ^^ next sample is ready, we write result from previous
       // if (|colbufs.wenable1) { __display("[gpu::write %d] pixcoord:%d texel:%d",cycle,pixcoord,sampler_io.texel); }
+      if (smplr_delay[$delay_bit$,1]) { __display("[gpu::write %d] pixcoord:%d discard:%b texel:%d",cycle,pixcoord,~(depth_ok & opaque),sampler_io.texel); }
     }
 
     // ---- texture sampler access
@@ -448,9 +459,12 @@ $$end
     }
 
     if (in_start) {
+$$if SIMULATION then
+      __display("[gpu::span_drawer %d] command received",cycle);
+$$end
       // texture id on bindings
       uint10 tex_id      = in_command[0,10];
-      uint1  bkg_tex_id  = tex_id == 0; // is the incoming texid the background?
+      bkg                = tex_id == 0; // is the incoming texid the background?
       // span init
       end                = terrain ? col_start : col_end;
       current            = col_start;
@@ -477,8 +491,8 @@ $$end
       ded                = plane  ? __signed(in_command[32,16])       : ded;
       dot_ray            = plane  ? __signed({in_command[48,16],8b0}) : dot_ray;
       // bind texture
-      sampler_io.do_bind = (tex_id != sampler_io.tex_id) & ~param & ~bkg_tex_id;
-      sampler_io.tex_id  = ~param ? tex_id : sampler_io.tex_id;
+      sampler_io.do_bind = (tex_id != sampler_io.tex_id) & ~param & ~bkg;
+      sampler_io.tex_id  = ~param & ~bkg ? tex_id : sampler_io.tex_id;
       // walls wc_u
       wc_u               = __signed( in_command[56,8] );
       // walls
@@ -572,8 +586,8 @@ $$end
     //                        ^^^^^ binding in progress
 
 $$if SIMULATION then
-    //if (sampler_io.do_fetch) { __display("[gpu::do_fetch] cycle %d",cycle); }
-    if (sampler_io.do_bind)  { __display("[gpu::do_bind ] cycle %d",cycle); }
+    // if (sampler_io.do_fetch) { __display("[gpu::span_drawer %d] do_fetch",cycle); }
+    // if (sampler_io.do_bind)  { __display("[gpu::span_drawer %d] do_bind",cycle);  }
     cycle = cycle + 1;
 $$end
 
@@ -750,7 +764,7 @@ $$end
 
       next_command = command;
       next_pending = 1;
-      idle         = 0; // not idle when command is pending
+      idle         = 1;
 
     } else { // send next command asap
 
@@ -773,7 +787,8 @@ $$end
       next_pending      = next_pending & ~(do_draw | do_send);
       // not idle when next command is pending and drawer is busy
       doing_draw = do_draw ? 2b11 : {1b0,doing_draw[1,1]};
-      idle       = ~( next_pending | drawer.busy /* | doing_draw[0,1]*/ );
+      // ^^^^ needed as drawer does not report busy before 2 cycles
+      idle       = ~ (drawer.busy | next_pending | doing_draw[0,1]);
 $$if SIMULATION then
       if (drawer.busy | sender.busy | do_draw | do_send) {
         cycle_in_commands = cycle_in_commands + 1;
@@ -800,7 +815,7 @@ $$end
     }
 
     // not ready while next command is pending
-    ready = ~next_pending;
+    ready         = ~next_pending;
     // which buffer to draw to and which to send to the screen
     drawer.buffer =  draw_buffer;
     sender.buffer = ~draw_buffer;

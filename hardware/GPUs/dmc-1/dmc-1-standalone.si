@@ -117,25 +117,17 @@ $$if MCH2022 or (SIMULATION and SIMUL_QPSRAM) or BROT then
 $$end
     txm.in_ready = ram_read | txm_io.in_ready;
     txm.addr     = ram_read ? ram_addr : txm_io.addr;
-    ram_busy     = txm.busy | txm.in_ready;
-$$if SIMULATION then
-    if (ram_read) {
-      // __display("[GPU] reading @%x (cycle %d)",ram_addr,cycle);
-    }
-    if (txm_was_busy ^ txm.busy) {
-      // __display("[GPU %d] memory busy change, now is %b",cycle,txm.busy);
-    }
-    txm_was_busy = txm.busy;
-$$end
   }
 
   algorithm <autorun> {
     while (1) {
       if (ram_write) {
+$$if SIMULATION then
         if (txm.busy) {
           __display("[GPU] ERROR memory is busy");
           __finish();
         }
+$$end
         uint24 waddr = ram_addr;
         // setup write
         txm.wenable  = 1;
@@ -163,6 +155,16 @@ $$end
   }
 
   always_after {
+    ram_busy     = txm.busy | txm.in_ready;
+$$if SIMULATION then
+    if (ram_read) {
+      // __display("[GPU] reading @%x (cycle %d)",ram_addr,cycle);
+    }
+    if (txm_was_busy ^ txm.busy) {
+      // __display("[GPU %d] memory busy change, now is %b",cycle,txm.busy);
+    }
+    txm_was_busy = txm.busy;
+$$end
     // texture memory interface
     txm_io.data  = txm.rdata;
     txm_io.busy  = txm.busy;
