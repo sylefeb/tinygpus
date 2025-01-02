@@ -135,7 +135,7 @@ $$end
     txm.in_ready  = binding[0,1] & (~prev_data_available | binding[1,1]);
 $$if SIMULATION then
     if (binding[0,1] & txm.in_ready & ~txm_was_in_ready) {
-      __display("[gpu::txm:bind %d]",cycle);
+      // __display("[gpu::txm:bind %d]",cycle);
     }
 $$end
     smplr.ready   = ~txm.in_ready; // ready to sample when not binding
@@ -178,7 +178,7 @@ $$end
       txm.in_ready   = fetch_next;
 $$if SIMULATION then
         if (txm.in_ready & ~txm_was_in_ready) {
-          __display("[gpu::txm:fetch %d]",cycle);
+          // __display("[gpu::txm:fetch %d]",cycle);
         }
         if (fetch_next) {
         //  __display("[gpu::fetch %d] @%x u:%d v:%d (texid:%d)",cycle,fetch_addr,u,v,smplr.tex_id);
@@ -352,7 +352,8 @@ $$end
     int5   light        = (__signed({1b0,in_command[26,4]})
                          - __signed({1b0,obscure_clmp[0,4]}));
     // opactiy test
-    uint1 opaque     = ~tcol_rdy & ~skip[0,1] & ((sampler_io.texel != 255) | lmapmode);
+    uint1 opaque     = ~tcol_rdy & ~skip[0,1]
+                     & ((sampler_io.texel != 255) | lmapmode | bkg);
     // final tex coords for walls
     uint8 wc_u_8     = (wc_u     );
     uint8 wc_v_8     = (wc_v >>11); // NOTE: has to match init
@@ -432,7 +433,7 @@ $$end
       depths.wenable1     = smplr_delay[$delay_bit$,1] & depth_ok & opaque;
       // NOTE:              ^^ next sample is ready, we write result from previous
       // if (|colbufs.wenable1) { __display("[gpu::write %d] pixcoord:%d texel:%d",cycle,pixcoord,sampler_io.texel); }
-      if (smplr_delay[$delay_bit$,1]) { __display("[gpu::write %d] pixcoord:%d discard:%b texel:%d",cycle,pixcoord,~(depth_ok & opaque),sampler_io.texel); }
+      if (smplr_delay[$delay_bit$,1]) { __display("[gpu::write %d] pixcoord:%d discard:%b(v:%b,o:%b) texel:%d",cycle,pixcoord,~(depth_ok & opaque),depth_ok,opaque,sampler_io.texel); }
     }
 
     // ---- texture sampler access
