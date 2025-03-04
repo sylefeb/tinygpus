@@ -44,7 +44,9 @@ __parameter__ (`tag == 2b11`)
 
 |  31-30 (2) | 29 (1)  | 28-15 (14) | 14-1 (14) | 0 (1)      |
 |------------|---------|------------|-----------|------------|
-| 2b11       | unused  |    dv      |  du       | 0          |
+| 2b11       | shift_and_set  |    dv      |  du       | 0          |
+
+`shift_and_set`==1 impacts the increments `inc_uy`, `inc_vy`, `inc_ny` which are shifted ten bits before the low bits are set.
 
 - __uv offset and render state__ (`tag == 2b11` *and* `tag2 == 01`).
  Offsets are set only if `mask offsets == 0`.
@@ -109,9 +111,9 @@ __Parameter__ (`tag == 2b11`) (30 bits max)
 
 - `tag2==10`, `data` is plane A data (also uses `dv`,`du` from Tex1)
 
-| 29-20 (10) | 19-10 (10)  | 9-0 (10)  |
-|------------|------------|------------|
-|  vy        |  uy        |  ny        |
+| 29-20 (10) | 19-10 (10)  | 9-0 (10)   |
+|------------|-------------|------------|
+|  inc_vy    |  inc_uy     | inc_ny     |
 
 - `tag2==11`, terrain view height
 

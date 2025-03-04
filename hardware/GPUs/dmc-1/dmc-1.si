@@ -266,9 +266,9 @@ $$end
   int24  dot_v(0);
   int24  dot_ray(0);
   int24  ded(0);
-  int10  ny_inc(0);
-  int10  uy_inc(0);
-  int10  vy_inc(0);
+  int20  ny_inc(0);
+  int20  uy_inc(0);
+  int20  vy_inc(0);
   int32  ray_t(0);
   int24  u_offset(0);
   int24  v_offset(0);
@@ -484,13 +484,24 @@ $$end
       // view_z
       view_z             = set_vwz? __signed(in_command[32,16]) : view_z;
       // plane span data
-      ny_inc             = planeA ? __signed(in_command[32,10])       : ny_inc;
-      uy_inc             = planeA ? __signed(in_command[42,10])       : uy_inc;
-      vy_inc             = planeA ? __signed(in_command[52,10])       : vy_inc;
-      dot_u              = planeA ? __signed({in_command[ 1,14],8b0}) : dot_u;
-      dot_v              = planeA ? __signed({in_command[15,14],8b0}) : dot_v;
       ded                = plane  ? __signed(in_command[32,16])       : ded;
       dot_ray            = plane  ? __signed({in_command[48,16],8b0}) : dot_ray;
+      uint1 shift_n_set  = in_command[29, 1];
+      ny_inc          = planeA & ~shift_n_set ? __signed(in_command[32,10])
+                      : planeA &  shift_n_set ? {ny_inc[0,10],in_command[32,10]}
+                      : ny_inc;
+      uy_inc          = planeA & ~shift_n_set ? __signed(in_command[42,10])
+                      : planeA &  shift_n_set ? {uy_inc[0,10],in_command[42,10]}
+                      : uy_inc;
+      vy_inc          = planeA & ~shift_n_set ? __signed(in_command[52,10])
+                      : planeA &  shift_n_set ? {vy_inc[0,10],in_command[52,10]}
+                      : vy_inc;
+      dot_u           = planeA & ~shift_n_set ? __signed({in_command[ 1,14],8b0})
+                      : planeA &  shift_n_set ? {dot_u[8,16],in_command[ 1,8]}
+                      : dot_u;
+      dot_v           = planeA & ~shift_n_set ? __signed({in_command[15,14],8b0})
+                      : planeA &  shift_n_set ? {dot_v[8,16],in_command[15,8]}
+                      : dot_v;
       // bind texture
       sampler_io.do_bind = (tex_id != sampler_io.tex_id) & ~param & ~bkg;
       sampler_io.tex_id  = ~param & ~bkg ? tex_id : sampler_io.tex_id;
