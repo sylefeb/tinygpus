@@ -433,7 +433,7 @@ $$end
       depths.wenable1     = smplr_delay[$delay_bit$,1] & depth_ok & opaque;
       // NOTE:              ^^ next sample is ready, we write result from previous
       // if (|colbufs.wenable1) { __display("[gpu::write %d] pixcoord:%d texel:%d",cycle,pixcoord,sampler_io.texel); }
-      if (smplr_delay[$delay_bit$,1]) { __display("[gpu::write %d] pixcoord:%d discard:%b(v:%b,o:%b) texel:%d",cycle,pixcoord,~(depth_ok & opaque),depth_ok,opaque,sampler_io.texel); }
+      // if (smplr_delay[$delay_bit$,1]) { __display("[gpu::write %d] pixcoord:%d discard:%b(v:%b,o:%b) texel:%d (%d,%d)",cycle,pixcoord,~(depth_ok & opaque),depth_ok,opaque,sampler_io.texel,sampler_io.u,sampler_io.v); }
     }
 
     // ---- texture sampler access
@@ -461,7 +461,7 @@ $$end
 
     if (in_start) {
 $$if SIMULATION then
-      __display("[gpu::span_drawer %d] command received",cycle);
+      // __display("[gpu::span_drawer %d] command received",cycle);
 $$end
       // texture id on bindings
       uint10 tex_id      = in_command[0,10];
@@ -518,13 +518,14 @@ $$end
       drawing            = ~param; // if not param, we start drawing
       start              = ~param;
       // skip allow to warm up the pipeline
-      skip               = 3b011;  // no pixel writes on two first iterations
+      skip               = {1b0,terrain,1b1}; // no pixel writes on first iterations
+      //                        ^^^^^^^ FIXME necessary?
       // terrain
       tcol_rdy           = 0; // next column height ready
       pickh_done         = 0; // picking done
 $$if SIMULATION then
       if (drawing) {
-        __display("[gpu::span_drawer %d] span %d->%d (texid:%d)",cycle,col_start,col_end,tex_id);
+        //__display("[gpu::span_drawer %d] span %d->%d (texid:%d)",cycle,col_start,col_end,tex_id);
       }
 $$end
     } else { // ~in_start -------------------------------
