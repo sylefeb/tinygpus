@@ -487,19 +487,19 @@ $$end
       ded                = plane  ? __signed(in_command[32,16])       : ded;
       dot_ray            = plane  ? __signed({in_command[48,16],8b0}) : dot_ray;
       uint1 shift_n_set  = in_command[29, 1];
-      ny_inc          = planeA & ~shift_n_set ? __signed(in_command[32,10])
+      ny_inc          = planeA & ~shift_n_set ? {{10{in_command[41,1]}},in_command[32,10]}
                       : planeA &  shift_n_set ? {ny_inc[0,10],in_command[32,10]}
                       : ny_inc;
-      uy_inc          = planeA & ~shift_n_set ? __signed(in_command[42,10])
+      uy_inc          = planeA & ~shift_n_set ? {{10{in_command[51,1]}},in_command[42,10]}
                       : planeA &  shift_n_set ? {uy_inc[0,10],in_command[42,10]}
                       : uy_inc;
-      vy_inc          = planeA & ~shift_n_set ? __signed(in_command[52,10])
+      vy_inc          = planeA & ~shift_n_set ? {{10{in_command[61,1]}},in_command[52,10]}
                       : planeA &  shift_n_set ? {vy_inc[0,10],in_command[52,10]}
                       : vy_inc;
-      dot_u           = planeA & ~shift_n_set ? __signed({in_command[ 1,14],8b0})
+      dot_u           = planeA & ~shift_n_set ? {{2{in_command[ 14,1]}},in_command[ 1,14],8b0}
                       : planeA &  shift_n_set ? {dot_u[8,16],in_command[ 1,8]}
                       : dot_u;
-      dot_v           = planeA & ~shift_n_set ? __signed({in_command[15,14],8b0})
+      dot_v           = planeA & ~shift_n_set ? {{2{in_command[ 28,1]}},in_command[15,14],8b0}
                       : planeA &  shift_n_set ? {dot_v[8,16],in_command[15,8]}
                       : dot_v;
       // bind texture
