@@ -13,13 +13,16 @@
 
 $include("dmc-1.si")
 
-$$if MUSBX then
-  $include('../../common/qpsram2x_esp64.si')
-$$elseif MCH2022 or (SIMULATION and SIMUL_QPSRAM) or BROT then
-  $include('../../common/qpsram2x.si')
-$$else
-  $include('../../common/spiflash2x.si')
-$$end
+// FIXME : Silice include issue, everything gets included regardless
+//         of comments and if/then/else
+
+//$$if MUSBX then
+//  // include('../../common/qpsram2x_esp64.si')
+//$$elseif MCH2022 or (SIMULATION and SIMUL_QPSRAM) or BROT then
+//  // include('../../common/qpsram2x.si')
+//$$else
+//  // include('../../common/spiflash2x.si')
+//$$end
 
 // ___________________________________________________________________________
 // A helper unit that converts the data available 2x pulse it into a
