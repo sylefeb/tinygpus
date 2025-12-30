@@ -70,6 +70,8 @@ unit DMC_1_gpu_standalone(
   output  uint8   ram_rdata,
   output  uint1   ram_next_byte,
   output  uint1   ram_busy,
+  // default bkg color
+  input   uint8   bkg_pal_idx
 ) {
 $$if SIMULATION then
   uint32 cycle(0);

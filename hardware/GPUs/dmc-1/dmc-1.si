@@ -28,6 +28,8 @@ $$doomchip_height_p2 = 8
 
 $$config['simple_dualport_bram_wmask_half_bytes_wenable1_width'] = 'data'
 
+$$bkg_pal_idx = 99
+
 // ---------------------------------------------------
 
 group sampler2D {
@@ -73,8 +75,6 @@ interface texmem_user {
 }
 
 // ---------------------------------------------------
-
-$$bkg_pal_idx = 99
 
 // _____________________________________________________________________________
 // |                                                                           |
@@ -212,6 +212,7 @@ unit span_drawer(
   output uint1               busy(1),
   output uint8               pickedh,
   texmem_user                txm,
+  input  uint8               bkg_pal_idx
 ) {
 
 $$terrain_step = 2048
@@ -421,7 +422,7 @@ $$end
       colbufs.wdata1      = ~lmapmode //                        vvv pad low bits if light
       ? { {(light[4,1] ? 4b0 : light[0,4]) | (bkg ? 4d15 : 4d0) , 4b0},
       //   ^^^^^^^^^^^ sign, clamp to 0       ^^^ bckg always lit
-           bkg ? 8d$bkg_pal_idx$ : sampler_io.texel }
+           bkg ? bkg_pal_idx : sampler_io.texel }
       : { sampler_io.texel, 8b0 };
       //   ^^^^^^^^^^^ write to light
       colbufs.wenable1    = {4{smplr_delay[$delay_bit$,1] & depth_ok & opaque}}
@@ -734,6 +735,7 @@ unit DMC_1_gpu(
   output! uint16      screen_data,
   output  uint8       pickedh,
   texmem_user         txm,
+  input   uint8       bkg_pal_idx
 ) {
 $$if SIMULATION then
   uint32 cycle(0);
@@ -748,9 +750,10 @@ $$end
   //                   ^^^^^^ { light , palette id }
 
   span_drawer drawer<reginputs>(
-    colbufs   <:>  colbufs,
-    txm       <:>  txm,
-    pickedh    :>  pickedh
+    colbufs     <:>  colbufs,
+    txm         <:>  txm,
+    pickedh      :>  pickedh,
+    bkg_pal_idx <:   bkg_pal_idx
   );
 
   column_sender sender<reginputs>(
