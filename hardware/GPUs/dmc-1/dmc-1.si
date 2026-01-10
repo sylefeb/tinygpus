@@ -188,7 +188,7 @@ $$end
     prev_data_available = txm.data_available;
     prev_data           = txm.data;
 $$if SIMULATION then
-    txm_was_in_ready = txm.in_ready;
+    txm_was_in_ready    = txm.in_ready;
     cycle = cycle + 1;
 $$end
   }
@@ -219,6 +219,10 @@ $$terrain_step = 2048
 
   sampler2D       sampler_io;
   texture_sampler sampler(txm <:> txm, smplr <:> sampler_io);
+  // records last sampled uv
+  uint11 prev_u = uninitialized;
+  uint11 prev_v = uninitialized;
+  uint1  same_uv(0);
 
   // BRAM for single column depth buffer
   simple_dualport_bram uint32 depths[$doomchip_height$] = uninitialized;
@@ -387,6 +391,7 @@ $$end
       }
       case 3: {
         tr_v  = ((result >>> 10) + __signed(v_offset));
+        __display("%d tr_v",cycle);
       }
       // ---- plane is done
 
@@ -451,7 +456,6 @@ $$end
                         |  (terrain ? {~current_done,tr_v[12,10]} : 11b0);
 //                                     ^^^^^^^^^^^^^ selects height or color
 //                                     hardcoded for a 1024 texture size ...
-
     // access inv_y
     // NOTE: uses values from previous cycle (fmax)
     {
@@ -530,12 +534,26 @@ $$if SIMULATION then
       }
 $$end
     } else { // ~in_start -------------------------------
-
       // ---- start fetching next sample: one cycle before the sampler is done
-      //      so we maximize texture memory throughput  vvv  leaving no gap
-      sampler_io.do_fetch = ~bkg // no fetch when drawing background
-                          & smplr_delay[$delay_bit-1$,1]
-                          & (~current_done | (terrain & ~terrain_done));
+      //      so we maximize texture memory throughput leaving no gap
+      uint1 do_fetch = ~bkg // no fetch when drawing background
+                     & smplr_delay[$delay_bit-1$,1]
+                     & (~current_done | (terrain & ~terrain_done));
+      same_uv        = do_fetch
+            ? (~terrain && (sampler_io.u == prev_u) && (sampler_io.v == prev_v))
+            : same_uv;
+      sampler_io.do_fetch = do_fetch & ~same_uv;
+      prev_u              = sampler_io.do_fetch ? sampler_io.u : prev_u;
+      prev_v              = sampler_io.do_fetch ? sampler_io.v : prev_v;
+      if (do_fetch) {
+        // NOTE: uv coord comp comes first, there is a delay btw initial request
+        //       and fetch
+        if (~same_uv) {
+          __display("[gpu::%d] fetch:%b texel:(%d,%d), fetching",cycle,sampler_io.do_fetch,sampler_io.u,sampler_io.v);
+        } else {
+          __display("[gpu::%d] fetch:%b texel:(%d,%d), repeat",cycle,sampler_io.do_fetch,sampler_io.u,sampler_io.v);
+        }
+      }
 			uint1 still_drawing = terrain ? ~terrain_done
                                     : (~current_done | skip[0,1]);
       //                               ^^^^^^^^^^^^    ^^^^^^^^^
@@ -546,7 +564,6 @@ $$end
       //      this happens on the next (and final) cycle of the orchestration
       //      loop as the texture memory controller output is registered
 			if (smplr_delay[$delay_bit$,1]) {
-
 				drawing             = still_drawing; // keep drawing
 				if (tcol_rdy) {
 					// next column height has been computed, start next terrain span
@@ -583,7 +600,9 @@ $$end
 			} // smplr_delay[$delay_bit$,1]
 
       if (smplr_delay[$delay_bit$,1]) {
-        smplr_delay = bkg ? {1b1,$delay_bit-1$b0}  : $smplr_seq_init$;
+        smplr_delay = bkg     ? {    1b1,$delay_bit-1$b0} :
+                      same_uv ? {4b0,1b1,$delay_bit-5$b0} :
+                                $smplr_seq_init$;
         state       = 0;  // restart compute sequence
       } else {
         smplr_delay = (~drawing | ~sampler_io.ready | start)
