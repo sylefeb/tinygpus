@@ -391,7 +391,7 @@ $$end
       }
       case 3: {
         tr_v  = ((result >>> 10) + __signed(v_offset));
-        __display("%d tr_v",cycle);
+        // __display("%d tr_v",cycle);
       }
       // ---- plane is done
 
@@ -545,15 +545,17 @@ $$end
       sampler_io.do_fetch = do_fetch & ~same_uv;
       prev_u              = sampler_io.do_fetch ? sampler_io.u : prev_u;
       prev_v              = sampler_io.do_fetch ? sampler_io.v : prev_v;
+$$if SIMULATION then
       if (do_fetch) {
         // NOTE: uv coord comp comes first, there is a delay btw initial request
         //       and fetch
         if (~same_uv) {
-          __display("[gpu::%d] fetch:%b texel:(%d,%d), fetching",cycle,sampler_io.do_fetch,sampler_io.u,sampler_io.v);
+          //__display("[gpu::%d] fetch:%b texel:(%d,%d), fetching",cycle,sampler_io.do_fetch,sampler_io.u,sampler_io.v);
         } else {
-          __display("[gpu::%d] fetch:%b texel:(%d,%d), repeat",cycle,sampler_io.do_fetch,sampler_io.u,sampler_io.v);
+          //__display("[gpu::%d] fetch:%b texel:(%d,%d), repeat",cycle,sampler_io.do_fetch,sampler_io.u,sampler_io.v);
         }
       }
+$$end
 			uint1 still_drawing = terrain ? ~terrain_done
                                     : (~current_done | skip[0,1]);
       //                               ^^^^^^^^^^^^    ^^^^^^^^^
